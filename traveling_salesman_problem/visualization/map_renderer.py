@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 import pygame
 
-from traveling_salesman_problem.config.visual_theme import VisualTheme
+from traveling_salesman_problem.config.visual_theme import VisualTheme, priority_to_color
 from traveling_salesman_problem.obstacles.models import LakeObstacle, Obstacle, TreeObstacle
 from traveling_salesman_problem.visualization.terrain_drawings import draw_lake, draw_tree
 
@@ -26,17 +26,13 @@ def draw_terrain_features(screen: pygame.Surface, obstacles: List[Obstacle]) -> 
 def draw_cities(
     screen: pygame.Surface,
     city_coordinates: List[CityCoordinate],
-    fill_color: Tuple[int, int, int],
+    priorities: List[int],
     node_radius: int,
 ) -> None:
-    for city in city_coordinates:
+    for city, priority in zip(city_coordinates, priorities):
+        fill_color = priority_to_color(priority)
         pygame.draw.circle(screen, VisualTheme.city_stroke, city, node_radius + 2)
-        pygame.draw.circle(
-            screen,
-            fill_color or VisualTheme.city_fill,
-            city,
-            node_radius,
-        )
+        pygame.draw.circle(screen, fill_color, city, node_radius)
 
 
 def draw_route_paths(

@@ -57,3 +57,29 @@ class VisualTheme:
 
     font_user_interface = "Segoe UI"
     font_monospace = "Consolas"
+
+
+def priority_to_color(priority: int) -> tuple[int, int, int]:
+    """Interpola verde (1) → amarelo (5) → vermelho (10)."""
+    clamped_priority = max(1, min(10, priority))
+    low_color = (76, 175, 80)
+    mid_color = (255, 193, 7)
+    high_color = (244, 67, 54)
+
+    if clamped_priority <= 5:
+        ratio = (clamped_priority - 1) / 4
+        return _interpolate_color(low_color, mid_color, ratio)
+
+    ratio = (clamped_priority - 5) / 5
+    return _interpolate_color(mid_color, high_color, ratio)
+
+
+def _interpolate_color(
+    start_color: tuple[int, int, int],
+    end_color: tuple[int, int, int],
+    ratio: float,
+) -> tuple[int, int, int]:
+    return tuple(
+        int(start + (end - start) * ratio)
+        for start, end in zip(start_color, end_color)
+    )
