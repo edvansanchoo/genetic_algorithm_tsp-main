@@ -10,6 +10,11 @@ from traveling_salesman_problem.obstacles.models import Obstacle
 CityCoordinate = Tuple[int, int]
 
 
+def generate_random_priorities(number_of_cities: int) -> List[int]:
+    """Sorteia prioridade 1–10 para cada cidade."""
+    return [random.randint(1, 10) for _ in range(number_of_cities)]
+
+
 def generate_random_city_coordinate(
     window_width: int,
     window_height: int,
@@ -37,6 +42,7 @@ def generate_random_city_coordinate(
 
 def reshuffle_cities_and_population(
     city_coordinates: List[CityCoordinate],
+    city_priorities: List[int],
     number_of_cities: int,
     population_size: int,
     population: List[List[CityCoordinate]],
@@ -59,6 +65,7 @@ def reshuffle_cities_and_population(
         )
         for _ in range(number_of_cities)
     ]
+    city_priorities[:] = generate_random_priorities(number_of_cities)
     population[:] = generate_random_population(city_coordinates, population_size)
     best_fitness_history.clear()
     best_route_history.clear()
