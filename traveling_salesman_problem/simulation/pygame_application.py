@@ -6,9 +6,11 @@ import pygame
 
 from traveling_salesman_problem.config.application_settings import ApplicationSettings
 from traveling_salesman_problem.config.visual_theme import VisualTheme
+from traveling_salesman_problem.genetic_algorithm.fitness import build_delivery_visit_order
 from traveling_salesman_problem.simulation.simulation_state import SimulationState
 from traveling_salesman_problem.visualization.application_layout import (
     draw_application_chrome,
+    draw_delivery_order_panel,
     draw_map_header,
     draw_map_legend,
     draw_section_header,
@@ -46,8 +48,19 @@ def run_application(settings=None) -> None:
 
         simulation.update_terrain_counts_if_changed()
 
-        generation_number, best_fitness, best_route, second_best_route = (
-            simulation.run_one_generation()
+        (
+            generation_number,
+            best_fitness,
+            best_route,
+            second_best_route,
+            best_distance,
+            best_weighted_priority,
+        ) = simulation.run_one_generation()
+
+        vertical_axis_label = (
+            "Fitness (custo total)"
+            if simulation.priority_weight > 0
+            else "Distância (pixels)"
         )
 
         draw_application_chrome(screen, settings.window_width, settings.window_height)
@@ -56,7 +69,7 @@ def run_application(settings=None) -> None:
             screen,
             list(range(len(simulation.best_fitness_history))),
             simulation.best_fitness_history,
-            vertical_axis_label="Distância (pixels)",
+            vertical_axis_label=vertical_axis_label,
         )
 
         controls_width = settings.plot_horizontal_offset - 2 * VisualTheme.control_margin
@@ -69,6 +82,7 @@ def run_application(settings=None) -> None:
             "Algoritmo",
         )
         simulation.mutation_slider.draw(screen)
+        simulation.priority_weight_slider.draw(screen)
 
         draw_section_header(
             screen,
@@ -88,6 +102,7 @@ def run_application(settings=None) -> None:
             "Ações",
         )
         simulation.regenerate_positions_button.draw(screen)
+        simulation.hospital_preset_button.draw(screen)
 
         draw_section_header(
             screen,
@@ -105,20 +120,36 @@ def run_application(settings=None) -> None:
             settings.window_width,
             generation_number,
             best_fitness,
+            best_distance,
+            best_weighted_priority,
+            simulation.priority_weight,
             simulation.mutation_slider.value * 100,
             simulation.terrain_control_panel.use_terrain_penalties,
         )
         draw_map_legend(
             screen,
-            settings.window_width - 150,
+            settings.window_width - 190,
             VisualTheme.map_header_height + 12,
+        )
+
+        visit_order = build_delivery_visit_order(
+            best_route,
+            simulation.city_coordinates,
+            simulation.city_priorities,
+        )
+        draw_delivery_order_panel(
+            screen,
+            visit_order,
+            VisualTheme.control_margin,
+            settings.window_height - 200,
+            controls_width,
         )
 
         draw_terrain_features(screen, simulation.terrain_features)
         draw_cities(
             screen,
             simulation.city_coordinates,
-            VisualTheme.city_fill,
+            simulation.city_priorities,
             settings.city_node_radius,
         )
         draw_route_paths(
@@ -135,7 +166,13 @@ def run_application(settings=None) -> None:
             line_width=1,
         )
 
-        print(f"Geração {generation_number}: melhor custo = {round(best_fitness, 2)}")
+        print(
+            f"Geração {generation_number}: "
+            f"fitness={round(best_fitness, 2)}  "
+            f"dist={round(best_distance, 2)}  "
+            f"prior={round(best_weighted_priority, 2)}  "
+            f"peso={round(simulation.priority_weight)}"
+        )
 
         pygame.display.flip()
         clock.tick(settings.frames_per_second)
