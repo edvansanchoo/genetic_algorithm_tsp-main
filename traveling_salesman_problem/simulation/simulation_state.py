@@ -8,7 +8,10 @@ import pygame
 
 from traveling_salesman_problem.config.application_settings import ApplicationSettings
 from traveling_salesman_problem.config.visual_theme import VisualTheme
-from traveling_salesman_problem.genetic_algorithm.fitness import calculate_route_fitness
+from traveling_salesman_problem.genetic_algorithm.fitness import (
+    calculate_route_fitness,
+    decompose_route_fitness,
+)
 from traveling_salesman_problem.genetic_algorithm.population import (
     generate_random_population,
     sort_population_by_fitness,
@@ -22,8 +25,10 @@ from traveling_salesman_problem.obstacles.placement import (
 )
 from traveling_salesman_problem.problem.city_generator import (
     generate_random_city_coordinate,
+    generate_random_priorities,
     reshuffle_cities_and_population,
 )
+from traveling_salesman_problem.problem.priority_presets import apply_hospital_priority_preset
 from traveling_salesman_problem.visualization.widgets import (
     ActionButton,
     IntegerSlider,
@@ -40,6 +45,7 @@ class SimulationState:
     settings: ApplicationSettings = field(default_factory=ApplicationSettings)
 
     city_coordinates: List[CityCoordinate] = field(default_factory=list)
+    city_priorities: List[int] = field(default_factory=list)
     population: List[Route] = field(default_factory=list)
     terrain_features: List[Obstacle] = field(default_factory=list)
 
@@ -49,9 +55,11 @@ class SimulationState:
     generation_counter: itertools.count = field(default_factory=lambda: itertools.count(start=1))
 
     mutation_slider: Optional[MutationSlider] = None
+    priority_weight_slider: Optional[MutationSlider] = None
     tree_count_slider: Optional[IntegerSlider] = None
     lake_count_slider: Optional[IntegerSlider] = None
     regenerate_positions_button: Optional[ActionButton] = None
+    hospital_preset_button: Optional[ActionButton] = None
     terrain_control_panel: Optional[TerrainControlPanel] = None
 
     last_tree_count: int = 0
@@ -65,6 +73,10 @@ class SimulationState:
     @property
     def obstacles(self) -> List[Obstacle]:
         return self.terrain_features
+
+    @property
+    def priority_weight(self) -> float:
+        return self.priority_weight_slider.value
 
     def initialize(self) -> None:
         settings = self.settings
@@ -90,6 +102,8 @@ class SimulationState:
             for _ in range(settings.number_of_cities)
         ]
 
+        self.city_priorities = generate_random_priorities(settings.number_of_cities)
+
         self.population = generate_random_population(
             self.city_coordinates,
             settings.population_size,
@@ -106,11 +120,13 @@ class SimulationState:
 
         self.section_algorithm_y = settings.controls_top_position
         mutation_y = self.section_algorithm_y + 26
-        self.section_quantity_y = mutation_y + settings.mutation_slider_height + 12
+        priority_weight_y = mutation_y + settings.mutation_slider_height + 12
+        self.section_quantity_y = priority_weight_y + settings.mutation_slider_height + 12
         terrain_count_y = self.section_quantity_y + 26
         self.section_actions_y = terrain_count_y + settings.count_slider_height + 12
         regenerate_y = self.section_actions_y + 26
-        self.section_terrain_y = regenerate_y + settings.regenerate_button_height + 12
+        hospital_preset_y = regenerate_y + settings.regenerate_button_height + VisualTheme.control_gap
+        self.section_terrain_y = hospital_preset_y + settings.regenerate_button_height + 12
         terrain_panel_y = self.section_terrain_y + 26
 
         self.mutation_slider = MutationSlider(
@@ -121,6 +137,18 @@ class SimulationState:
             value=settings.initial_mutation_probability,
             label="Taxa de mutação",
             value_suffix="%",
+        )
+
+        self.priority_weight_slider = MutationSlider(
+            position_x=VisualTheme.control_margin,
+            position_y=priority_weight_y,
+            width=controls_width,
+            height=settings.mutation_slider_height,
+            value=settings.initial_priority_weight,
+            minimum_value=0.0,
+            maximum_value=100.0,
+            label="Peso da prioridade",
+            value_suffix="",
         )
 
         self.tree_count_slider = IntegerSlider(
@@ -154,6 +182,15 @@ class SimulationState:
             subtitle="Árvores, lagos e cidades",
         )
 
+        self.hospital_preset_button = ActionButton(
+            position_x=VisualTheme.control_margin,
+            position_y=hospital_preset_y,
+            width=controls_width,
+            height=settings.regenerate_button_height,
+            label="Cenário hospitalar",
+            subtitle="Prioridades críticas fixas",
+        )
+
         self.terrain_control_panel = TerrainControlPanel(
             position_x=VisualTheme.control_margin,
             position_y=terrain_panel_y,
@@ -176,6 +213,9 @@ class SimulationState:
         self.terrain_control_panel.lake_penalty_slider.apply_penalty_to_terrain()
         self.terrain_control_panel.rebuild(self.terrain_features)
 
+    def apply_hospital_preset(self) -> None:
+        self.city_priorities[:] = apply_hospital_priority_preset(len(self.city_coordinates))
+
     def shuffle_terrain_and_cities(self) -> None:
         settings = self.settings
         reshuffle_terrain_feature_positions(
@@ -188,6 +228,7 @@ class SimulationState:
         self.terrain_control_panel.rebuild(self.terrain_features)
         reshuffle_cities_and_population(
             self.city_coordinates,
+            self.city_priorities,
             settings.number_of_cities,
             settings.population_size,
             self.population,
@@ -202,17 +243,26 @@ class SimulationState:
 
     def handle_control_events(self, event: pygame.event.Event) -> None:
         self.mutation_slider.handle_event(event)
+        self.priority_weight_slider.handle_event(event)
         self.tree_count_slider.handle_event(event)
         self.lake_count_slider.handle_event(event)
         self.regenerate_positions_button.handle_event(event)
+        self.hospital_preset_button.handle_event(event)
         self.terrain_control_panel.handle_event(event)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_o:
                 toggle = self.terrain_control_panel.global_penalty_toggle
                 toggle.is_active = not toggle.is_active
+            elif event.key == pygame.K_p:
+                self.apply_hospital_preset()
 
     def update_terrain_counts_if_changed(self) -> None:
+        if self.hospital_preset_button.was_pressed:
+            self.hospital_preset_button.was_pressed = False
+            self.apply_hospital_preset()
+            return
+
         if self.regenerate_positions_button.was_pressed:
             self.regenerate_positions_button.was_pressed = False
             self.shuffle_terrain_and_cities()
@@ -230,13 +280,21 @@ class SimulationState:
             self.last_tree_count = current_trees
             self.last_lake_count = current_lakes
 
-    def run_one_generation(self) -> tuple[int, float, Route, Route]:
+    def run_one_generation(self) -> tuple[int, float, Route, Route, float, float]:
         settings = self.settings
         use_penalties = self.terrain_control_panel.use_terrain_penalties
         mutation_probability = self.mutation_slider.value
+        priority_weight = self.priority_weight
 
         population_fitness = [
-            calculate_route_fitness(route, self.terrain_features, use_penalties)
+            calculate_route_fitness(
+                route,
+                self.terrain_features,
+                use_penalties,
+                self.city_coordinates,
+                self.city_priorities,
+                priority_weight,
+            )
             for route in self.population
         ]
 
@@ -246,10 +304,13 @@ class SimulationState:
         )
 
         best_route = self.population[0]
-        best_fitness = calculate_route_fitness(
+        best_fitness, best_distance, best_weighted_priority = decompose_route_fitness(
             best_route,
             self.terrain_features,
             use_penalties,
+            self.city_coordinates,
+            self.city_priorities,
+            priority_weight,
         )
         second_best_route = self.population[1]
 
@@ -264,4 +325,11 @@ class SimulationState:
         )
 
         generation_number = next(self.generation_counter)
-        return generation_number, best_fitness, best_route, second_best_route
+        return (
+            generation_number,
+            best_fitness,
+            best_route,
+            second_best_route,
+            best_distance,
+            best_weighted_priority,
+        )

@@ -14,6 +14,7 @@ class ApplicationSettings:
     number_of_cities: int = 15
     population_size: int = 100
     initial_mutation_probability: float = 0.01
+    initial_priority_weight: float = 0.0
 
     initial_tree_count: int = 3
     initial_lake_count: int = 2
