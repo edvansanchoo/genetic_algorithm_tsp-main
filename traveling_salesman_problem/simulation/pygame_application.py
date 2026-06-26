@@ -22,6 +22,72 @@ from traveling_salesman_problem.visualization.map_renderer import (
     draw_route_paths,
     draw_terrain_features,
 )
+from traveling_salesman_problem.visualization.sidebar_scroll import SidebarScrollView
+
+
+def _draw_scrollable_sidebar(
+    simulation: SimulationState,
+    sidebar_scroll: SidebarScrollView,
+    visit_order: list[tuple[int, int, int]],
+    controls_width: int,
+) -> None:
+    content_surface = sidebar_scroll.content_surface
+
+    draw_section_header(
+        content_surface,
+        VisualTheme.control_margin,
+        simulation.section_algorithm_y,
+        controls_width,
+        "Algoritmo",
+    )
+    simulation.mutation_slider.draw(content_surface)
+    simulation.priority_weight_slider.draw(content_surface)
+
+    draw_section_header(
+        content_surface,
+        VisualTheme.control_margin,
+        simulation.section_quantity_y,
+        controls_width,
+        "Terreno no mapa",
+    )
+    simulation.tree_count_slider.draw(content_surface)
+    simulation.lake_count_slider.draw(content_surface)
+
+    draw_section_header(
+        content_surface,
+        VisualTheme.control_margin,
+        simulation.section_actions_y,
+        controls_width,
+        "Ações",
+    )
+    simulation.regenerate_positions_button.draw(content_surface)
+    simulation.hospital_preset_button.draw(content_surface)
+
+    draw_section_header(
+        content_surface,
+        VisualTheme.control_margin,
+        simulation.section_terrain_y,
+        controls_width,
+        "Penalidades de terreno",
+    )
+    simulation.terrain_control_panel.draw(content_surface)
+
+    delivery_section_y = simulation.delivery_order_section_y
+    draw_section_header(
+        content_surface,
+        VisualTheme.control_margin,
+        delivery_section_y,
+        controls_width,
+        "Ordem de entregas",
+    )
+    draw_delivery_order_panel(
+        content_surface,
+        visit_order,
+        VisualTheme.control_margin,
+        delivery_section_y + 26,
+        controls_width,
+        draw_title=False,
+    )
 
 
 def run_application(settings=None) -> None:
@@ -36,15 +102,32 @@ def run_application(settings=None) -> None:
     simulation = SimulationState(settings=settings)
     simulation.initialize()
 
+    sidebar_scroll = SidebarScrollView(
+        viewport_top=settings.scroll_viewport_top,
+        viewport_height=settings.scroll_viewport_height,
+        content_width=settings.plot_horizontal_offset - VisualTheme.scrollbar_width - 8,
+    )
+
     is_running = True
     while is_running:
         for event in pygame.event.get():
-            simulation.handle_control_events(event)
+            if sidebar_scroll.handle_event(event):
+                continue
+
             if event.type == pygame.QUIT:
                 is_running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_q, pygame.K_ESCAPE):
                     is_running = False
+                else:
+                    simulation.handle_control_events(event)
+            elif event.type in (
+                pygame.MOUSEBUTTONDOWN,
+                pygame.MOUSEBUTTONUP,
+                pygame.MOUSEMOTION,
+            ):
+                if sidebar_scroll.is_mouse_in_viewport(event.pos):
+                    simulation.handle_control_events(sidebar_scroll.translate_event(event))
 
         simulation.update_terrain_counts_if_changed()
 
@@ -56,6 +139,15 @@ def run_application(settings=None) -> None:
             best_distance,
             best_weighted_priority,
         ) = simulation.run_one_generation()
+
+        visit_order = build_delivery_visit_order(
+            best_route,
+            simulation.city_coordinates,
+            simulation.city_priorities,
+        )
+        sidebar_scroll.set_content_height(
+            simulation.calculate_scrollable_content_height(len(visit_order))
+        )
 
         vertical_axis_label = (
             "Fitness (custo total)"
@@ -73,46 +165,9 @@ def run_application(settings=None) -> None:
         )
 
         controls_width = settings.plot_horizontal_offset - 2 * VisualTheme.control_margin
-
-        draw_section_header(
-            screen,
-            VisualTheme.control_margin,
-            simulation.section_algorithm_y,
-            controls_width,
-            "Algoritmo",
-        )
-        simulation.mutation_slider.draw(screen)
-        simulation.priority_weight_slider.draw(screen)
-
-        draw_section_header(
-            screen,
-            VisualTheme.control_margin,
-            simulation.section_quantity_y,
-            controls_width,
-            "Terreno no mapa",
-        )
-        simulation.tree_count_slider.draw(screen)
-        simulation.lake_count_slider.draw(screen)
-
-        draw_section_header(
-            screen,
-            VisualTheme.control_margin,
-            simulation.section_actions_y,
-            controls_width,
-            "Ações",
-        )
-        simulation.regenerate_positions_button.draw(screen)
-        simulation.hospital_preset_button.draw(screen)
-
-        draw_section_header(
-            screen,
-            VisualTheme.control_margin,
-            simulation.section_terrain_y,
-            controls_width,
-            "Penalidades de terreno",
-        )
-        simulation.terrain_control_panel.draw(screen)
-        draw_sidebar_footer(screen, settings.window_height - 24)
+        _draw_scrollable_sidebar(simulation, sidebar_scroll, visit_order, controls_width)
+        sidebar_scroll.blit_to_screen(screen)
+        draw_sidebar_footer(screen, settings.sidebar_footer_y)
 
         draw_map_header(
             screen,
@@ -130,19 +185,6 @@ def run_application(settings=None) -> None:
             screen,
             settings.window_width - 190,
             VisualTheme.map_header_height + 12,
-        )
-
-        visit_order = build_delivery_visit_order(
-            best_route,
-            simulation.city_coordinates,
-            simulation.city_priorities,
-        )
-        draw_delivery_order_panel(
-            screen,
-            visit_order,
-            VisualTheme.control_margin,
-            settings.window_height - 200,
-            controls_width,
         )
 
         draw_terrain_features(screen, simulation.terrain_features)

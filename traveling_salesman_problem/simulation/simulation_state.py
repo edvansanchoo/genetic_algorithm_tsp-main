@@ -78,6 +78,16 @@ class SimulationState:
     def priority_weight(self) -> float:
         return self.priority_weight_slider.value
 
+    @property
+    def delivery_order_section_y(self) -> int:
+        terrain_panel_y = self.section_terrain_y + 26
+        return terrain_panel_y + self.terrain_control_panel.height + 12
+
+    def calculate_scrollable_content_height(self, delivery_row_count: int) -> int:
+        delivery_panel_y = self.delivery_order_section_y + 26
+        delivery_panel_height = 18 + 6 + delivery_row_count * 16 + 20
+        return delivery_panel_y + delivery_panel_height
+
     def initialize(self) -> None:
         settings = self.settings
 
@@ -118,7 +128,7 @@ class SimulationState:
         controls_width = settings.plot_horizontal_offset - 2 * VisualTheme.control_margin
         half_width = (controls_width - VisualTheme.control_gap) // 2
 
-        self.section_algorithm_y = settings.controls_top_position
+        self.section_algorithm_y = 0
         mutation_y = self.section_algorithm_y + 26
         priority_weight_y = mutation_y + settings.mutation_slider_height + 12
         self.section_quantity_y = priority_weight_y + settings.mutation_slider_height + 12

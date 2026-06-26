@@ -112,7 +112,7 @@ def draw_map_header(
     )
 
     title_font = get_user_interface_font(15, bold=True)
-    statistics_font = get_monospace_font(13)
+    statistics_font = get_monospace_font(11)
     muted_font = get_user_interface_font(11)
 
     screen.blit(
@@ -139,15 +139,20 @@ def draw_map_header(
     )
 
     statistics_parts = [
-        f"Geração {generation_number}",
-        f"Fitness {best_fitness:.1f}",
-        f"Dist {best_distance:.1f}",
+        f"Gen {generation_number}",
+        f"Fit {best_fitness:.0f}",
+        f"Dist {best_distance:.0f}",
     ]
     if priority_weight > 0:
-        statistics_parts.append(f"Prior {weighted_priority_penalty:.1f}")
+        statistics_parts.append(f"Prior {weighted_priority_penalty:.0f}")
     statistics_parts.append(f"Mut {mutation_percentage:.0f}%")
-    statistics_text = "   ·   ".join(statistics_parts)
+    statistics_text = "  ·  ".join(statistics_parts)
     statistics_surface = statistics_font.render(statistics_text, True, VisualTheme.text_primary)
+    max_statistics_width = window_width - map_start_x - 32
+    if statistics_surface.get_width() > max_statistics_width:
+        while statistics_surface.get_width() > max_statistics_width and len(statistics_text) > 0:
+            statistics_text = statistics_text[:-1]
+        statistics_surface = statistics_font.render(f"{statistics_text}…", True, VisualTheme.text_primary)
     statistics_rectangle = statistics_surface.get_rect(
         midright=(window_width - 16, VisualTheme.map_header_height // 2 + 2),
     )
@@ -160,39 +165,33 @@ def draw_delivery_order_panel(
     position_x: int,
     position_y: int,
     width: int,
-    maximum_visible_rows: int = 8,
+    maximum_visible_rows: int | None = None,
+    draw_title: bool = True,
 ) -> int:
-    header_font = get_user_interface_font(11, bold=True)
+    visible_rows = len(visit_order) if maximum_visible_rows is None else maximum_visible_rows
     row_font = get_monospace_font(10)
-    screen.blit(
-        header_font.render("ORDEM DE ENTREGAS", True, VisualTheme.text_muted),
-        (position_x, position_y),
-    )
-    current_y = position_y + 18
-    pygame.draw.line(
-        screen,
-        VisualTheme.divider,
-        (position_x, current_y),
-        (position_x + width, current_y),
-        1,
-    )
-    current_y += 6
+    current_y = position_y
 
-    for position, city_number, priority in visit_order[:maximum_visible_rows]:
+    if draw_title:
+        header_font = get_user_interface_font(11, bold=True)
+        screen.blit(
+            header_font.render("ORDEM DE ENTREGAS", True, VisualTheme.text_muted),
+            (position_x, current_y),
+        )
+        current_y += 18
+        pygame.draw.line(
+            screen,
+            VisualTheme.divider,
+            (position_x, current_y),
+            (position_x + width, current_y),
+            1,
+        )
+        current_y += 6
+
+    for position, city_number, priority in visit_order[:visible_rows]:
         critical_marker = " ★" if priority >= 8 else ""
         line = f"{position:2d} · Cidade {city_number:2d} · prior. {priority}{critical_marker}"
         screen.blit(row_font.render(line, True, VisualTheme.text_primary), (position_x, current_y))
-        current_y += 16
-
-    if len(visit_order) > maximum_visible_rows:
-        screen.blit(
-            row_font.render(
-                f"... +{len(visit_order) - maximum_visible_rows} entregas",
-                True,
-                VisualTheme.text_muted,
-            ),
-            (position_x, current_y),
-        )
         current_y += 16
 
     return current_y + 4
@@ -243,8 +242,13 @@ def draw_sidebar_footer(
     position_y: int,
 ) -> None:
     hint_font = get_user_interface_font(10)
-    hints = "Q · Sair    O · Penalidades de terreno    P · Cenário hospitalar    Esc · Fechar"
+    first_line = "Q · Sair          Esc · Fechar"
+    second_line = "O · Terreno       P · Hospitalar"
     screen.blit(
-        hint_font.render(hints, True, VisualTheme.text_muted),
+        hint_font.render(first_line, True, VisualTheme.text_muted),
         (VisualTheme.control_margin, position_y),
+    )
+    screen.blit(
+        hint_font.render(second_line, True, VisualTheme.text_muted),
+        (VisualTheme.control_margin, position_y + 16),
     )

@@ -36,6 +36,23 @@ class ApplicationSettings:
         return VisualTheme.plot_height + VisualTheme.control_gap
 
     @property
+    def scroll_viewport_top(self) -> int:
+        return self.controls_top_position
+
+    @property
+    def scroll_viewport_height(self) -> int:
+        return (
+            self.window_height
+            - self.scroll_viewport_top
+            - VisualTheme.sidebar_footer_height
+            - VisualTheme.control_gap
+        )
+
+    @property
+    def sidebar_footer_y(self) -> int:
+        return self.window_height - VisualTheme.sidebar_footer_height
+
+    @property
     def map_minimum_x(self) -> int:
         return self.plot_horizontal_offset + self.map_margin
 

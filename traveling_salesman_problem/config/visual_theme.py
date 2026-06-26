@@ -9,6 +9,8 @@ class VisualTheme:
     control_gap: int = 10
     section_gap: int = 16
     row_height: int = 32
+    sidebar_footer_height: int = 36
+    scrollbar_width: int = 6
 
     background_application = (248, 249, 252)
     background_sidebar = (241, 244, 249)
