@@ -8,6 +8,7 @@ import pygame
 from traveling_salesman_problem.config.visual_theme import VisualTheme, priority_to_color
 from traveling_salesman_problem.genetic_algorithm.fitness import get_rotated_route
 from traveling_salesman_problem.obstacles.models import LakeObstacle, Obstacle, TreeObstacle
+from traveling_salesman_problem.visualization.fonts import get_monospace_font
 from traveling_salesman_problem.visualization.terrain_drawings import draw_lake, draw_tree
 
 CityCoordinate = Tuple[int, int]
@@ -104,3 +105,27 @@ def draw_route_direction_arrows(
         triangle_points = [tip, base_left, base_right]
         pygame.draw.polygon(screen, fill_color, triangle_points)
         pygame.draw.polygon(screen, outline_color, triangle_points, 1)
+
+
+def draw_route_visit_positions(
+    screen: pygame.Surface,
+    route: Route,
+    city_coordinates: List[CityCoordinate],
+    node_radius: int,
+) -> None:
+    """Desenha a posição de visita abaixo de cada nó da melhor rota."""
+    rotated_route = get_rotated_route(route, city_coordinates)
+    if not rotated_route:
+        return
+
+    label_offset_y = node_radius + 6
+    regular_font = get_monospace_font(10)
+    bold_font = get_monospace_font(10, bold=True)
+
+    for position, city in enumerate(rotated_route, start=1):
+        label_font = bold_font if position == 1 else regular_font
+        label_surface = label_font.render(str(position), True, VisualTheme.text_primary)
+        label_rectangle = label_surface.get_rect(
+            center=(city[0], city[1] + label_offset_y),
+        )
+        screen.blit(label_surface, label_rectangle)

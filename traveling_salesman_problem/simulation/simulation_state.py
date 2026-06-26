@@ -35,7 +35,6 @@ from traveling_salesman_problem.visualization.widgets import (
     MutationSlider,
     TerrainControlPanel,
 )
-from traveling_salesman_problem.visualization.widgets.toggle_button import ToggleButton
 
 CityCoordinate = Tuple[int, int]
 Route = List[CityCoordinate]
@@ -57,7 +56,6 @@ class SimulationState:
 
     mutation_slider: Optional[MutationSlider] = None
     priority_weight_slider: Optional[MutationSlider] = None
-    route_direction_toggle: Optional[ToggleButton] = None
     tree_count_slider: Optional[IntegerSlider] = None
     lake_count_slider: Optional[IntegerSlider] = None
     regenerate_positions_button: Optional[ActionButton] = None
@@ -79,10 +77,6 @@ class SimulationState:
     @property
     def priority_weight(self) -> float:
         return self.priority_weight_slider.value
-
-    @property
-    def show_route_direction(self) -> bool:
-        return self.route_direction_toggle.is_active
 
     @property
     def delivery_order_section_y(self) -> int:
@@ -137,8 +131,7 @@ class SimulationState:
         self.section_algorithm_y = 0
         mutation_y = self.section_algorithm_y + 26
         priority_weight_y = mutation_y + settings.mutation_slider_height + 12
-        route_direction_y = priority_weight_y + settings.mutation_slider_height + 12
-        self.section_quantity_y = route_direction_y + VisualTheme.row_height + 12
+        self.section_quantity_y = priority_weight_y + settings.mutation_slider_height + 12
         terrain_count_y = self.section_quantity_y + 26
         self.section_actions_y = terrain_count_y + settings.count_slider_height + 12
         regenerate_y = self.section_actions_y + 26
@@ -166,15 +159,6 @@ class SimulationState:
             maximum_value=100.0,
             label="Peso da prioridade",
             value_suffix="",
-        )
-
-        self.route_direction_toggle = ToggleButton(
-            position_x=VisualTheme.control_margin,
-            position_y=route_direction_y,
-            width=controls_width,
-            height=VisualTheme.row_height,
-            label="Mostrar direção da rota",
-            is_active=False,
         )
 
         self.tree_count_slider = IntegerSlider(
@@ -270,7 +254,6 @@ class SimulationState:
     def handle_control_events(self, event: pygame.event.Event) -> None:
         self.mutation_slider.handle_event(event)
         self.priority_weight_slider.handle_event(event)
-        self.route_direction_toggle.handle_event(event)
         self.tree_count_slider.handle_event(event)
         self.lake_count_slider.handle_event(event)
         self.regenerate_positions_button.handle_event(event)

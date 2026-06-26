@@ -21,6 +21,7 @@ from traveling_salesman_problem.visualization.map_renderer import (
     draw_cities,
     draw_route_direction_arrows,
     draw_route_paths,
+    draw_route_visit_positions,
     draw_terrain_features,
 )
 from traveling_salesman_problem.visualization.sidebar_scroll import SidebarScrollView
@@ -43,7 +44,6 @@ def _draw_scrollable_sidebar(
     )
     simulation.mutation_slider.draw(content_surface)
     simulation.priority_weight_slider.draw(content_surface)
-    simulation.route_direction_toggle.draw(content_surface)
 
     draw_section_header(
         content_surface,
@@ -187,7 +187,6 @@ def run_application(settings=None) -> None:
             screen,
             settings.window_width - 190,
             VisualTheme.map_header_height + 12,
-            show_route_direction=simulation.show_route_direction,
         )
 
         draw_terrain_features(screen, simulation.terrain_features)
@@ -204,12 +203,17 @@ def run_application(settings=None) -> None:
             line_width=3,
             draw_glow=True,
         )
-        if simulation.show_route_direction:
-            draw_route_direction_arrows(
-                screen,
-                best_route,
-                simulation.city_coordinates,
-            )
+        draw_route_direction_arrows(
+            screen,
+            best_route,
+            simulation.city_coordinates,
+        )
+        draw_route_visit_positions(
+            screen,
+            best_route,
+            simulation.city_coordinates,
+            settings.city_node_radius,
+        )
         draw_route_paths(
             screen,
             second_best_route,
