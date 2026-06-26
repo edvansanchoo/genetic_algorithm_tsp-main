@@ -18,8 +18,12 @@ def get_user_interface_font(size: int, bold: bool = False) -> pygame.font.Font:
     return _font_cache[cache_key]
 
 
-def get_monospace_font(size: int) -> pygame.font.Font:
-    cache_key = (VisualTheme.font_monospace, size, False)
+def get_monospace_font(size: int, bold: bool = False) -> pygame.font.Font:
+    cache_key = (VisualTheme.font_monospace, size, bold)
     if cache_key not in _font_cache:
-        _font_cache[cache_key] = pygame.font.SysFont(VisualTheme.font_monospace, size)
+        _font_cache[cache_key] = pygame.font.SysFont(
+            VisualTheme.font_monospace,
+            size,
+            bold=bold,
+        )
     return _font_cache[cache_key]
