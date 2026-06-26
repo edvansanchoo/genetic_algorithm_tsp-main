@@ -201,16 +201,21 @@ def draw_map_legend(
     screen: pygame.Surface,
     position_x: int,
     position_y: int,
+    show_route_direction: bool = False,
 ) -> None:
     legend_items = [
         (VisualTheme.route_best, "Melhor rota"),
         (VisualTheme.route_second_best, "Segunda melhor"),
+    ]
+    if show_route_direction:
+        legend_items.append((VisualTheme.route_best, "→ Direção da rota"))
+    legend_items.extend([
         (priority_to_color(1), "Baixa prioridade (1)"),
         (priority_to_color(5), "Média prioridade (5)"),
         (priority_to_color(10), "Alta prioridade (10)"),
         (VisualTheme.tree_foliage, "Árvore"),
         (VisualTheme.lake_water, "Lago"),
-    ]
+    ])
     padding = 10
     row_height = 18
     label_font = get_user_interface_font(11)

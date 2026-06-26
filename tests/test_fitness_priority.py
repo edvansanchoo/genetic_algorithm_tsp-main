@@ -6,6 +6,7 @@ from traveling_salesman_problem.genetic_algorithm.fitness import (
     calculate_route_distance,
     calculate_route_fitness,
     decompose_route_fitness,
+    get_rotated_route,
 )
 from traveling_salesman_problem.problem.city_generator import generate_random_priorities
 from traveling_salesman_problem.problem.priority_presets import apply_hospital_priority_preset
@@ -96,3 +97,9 @@ class PriorityPenaltyTests(unittest.TestCase):
             visit_order,
             [(1, 1, 5), (2, 2, 10), (3, 3, 1), (4, 4, 3)],
         )
+
+    def test_get_rotated_route_starts_at_reference_city(self):
+        route = [(10, 0), (10, 10), (0, 10), (0, 0)]
+        rotated_route = get_rotated_route(route, self.city_coordinates)
+        self.assertEqual(rotated_route[0], (0, 0))
+        self.assertEqual(len(rotated_route), 4)

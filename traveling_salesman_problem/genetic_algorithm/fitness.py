@@ -67,6 +67,20 @@ def calculate_priority_penalty(
     return total_penalty
 
 
+def get_rotated_route(
+    route: Route,
+    city_coordinates: List[CityCoordinate],
+) -> Route:
+    """Retorna a rota rotacionada para iniciar em city_coordinates[0]."""
+    if not route:
+        return []
+
+    reference_city = city_coordinates[0]
+    start_index = route.index(reference_city)
+    number_of_cities = len(route)
+    return [route[(start_index + offset) % number_of_cities] for offset in range(number_of_cities)]
+
+
 def build_delivery_visit_order(
     route: Route,
     city_coordinates: List[CityCoordinate],
@@ -77,14 +91,10 @@ def build_delivery_visit_order(
     coordinate_to_city_number = {
         coordinate: index + 1 for index, coordinate in enumerate(city_coordinates)
     }
-    reference_city = city_coordinates[0]
-    start_index = route.index(reference_city)
-    number_of_cities = len(route)
+    rotated_route = get_rotated_route(route, city_coordinates)
     visit_order: List[Tuple[int, int, int]] = []
 
-    for offset in range(number_of_cities):
-        position = offset + 1
-        city = route[(start_index + offset) % number_of_cities]
+    for position, city in enumerate(rotated_route, start=1):
         visit_order.append(
             (position, coordinate_to_city_number[city], coordinate_to_priority[city])
         )
