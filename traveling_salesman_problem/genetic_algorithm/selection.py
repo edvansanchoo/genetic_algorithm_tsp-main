@@ -7,6 +7,7 @@ import numpy as np
 
 from traveling_salesman_problem.genetic_algorithm.crossover import order_crossover
 from traveling_salesman_problem.genetic_algorithm.mutation import apply_mutation
+from traveling_salesman_problem.genetic_algorithm.fitness import add_2opt
 
 CityCoordinate = Tuple[float, float]
 Route = List[CityCoordinate]
@@ -57,6 +58,11 @@ def evolve_next_generation(
             mutation_probability,
             mutation_type=mutation_type,
         )
+
+        # 2-opt costuma reduzir drasticamente, achando boas rotas mais cedo
+        # em contrapartida 2-opt custa mais no processamento por geração
+        # child_route = add_2opt(child_route)
+
         new_population.append(child_route)
 
     return new_population

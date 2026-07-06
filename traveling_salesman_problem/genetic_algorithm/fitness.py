@@ -146,3 +146,38 @@ def decompose_route_fitness(
 
     fitness_total = distance + weighted_priority_penalty
     return fitness_total, distance, weighted_priority_penalty
+
+def add_2opt(route):
+    """Melhora um rota aplicando 2-opt."""
+    improved_route = list(route)
+
+    if len(improved_route) < 4:
+        return improved_route
+    
+    improved = True
+    while improved:
+        improved = False
+        current_distance = calculate_route_distance(improved_route)
+
+        for first_index in range(len(improved_route) - 1):
+            for second_index in range(first_index + 1, len(improved_route)):
+                if second_index - first_index == 1:
+                    continue
+
+                candidate_route = list(improved_route)
+                candidate_route[first_index + 1:second_index + 1] = reversed(
+                    candidate_route[first_index + 1:second_index + 1]
+                )
+
+                candidate_distace = calculate_route_distance(candidate_route)
+
+                if candidate_distace < current_distance:
+                    improved_route = candidate_route
+                    current_distance = candidate_route
+                    current_distance = candidate_distace
+                    improved = True
+                    break
+            if improved:
+                break
+
+    return improved_route
