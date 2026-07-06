@@ -34,11 +34,12 @@ def swap_adjacent_cities_mutation(
 
     return mutated_route
 
+# essa mutação costuma ser mais ousada já que tende a explorar mais, dependendo do elitismo tende a ser mais instável
 def swap_random_cities_mutation(
     route: Route,
     mutation_probability: float,
 ) -> Route:
-    """Troca duas quaisquer com probabilidade definida."""
+    """Troca duas cidades quaisquer com probabilidade definida."""
     mutated_route = copy.deepcopy(route)
 
     if (random.random() >= mutation_probability):

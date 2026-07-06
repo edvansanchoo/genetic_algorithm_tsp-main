@@ -35,7 +35,8 @@ def evolve_next_generation(
     fitness_values: List[float],
     population_size: int,
     mutation_probability: float,
-    mutation_type: str = "adjacent", # seleciona o tipo de mutação adjacent/random
+    mutation_type: str = "adjacent", # seleciona o tipo de mutação adjacent/random,
+    n_elite: int = 2, # elitismo para guardar "os melhores" para a próxima geração
 ) -> List[Route]:
     """
     Produz a próxima geração com elitismo, cruzamento e mutação.

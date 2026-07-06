@@ -332,6 +332,10 @@ class SimulationState:
             population_fitness,
             settings.population_size,
             mutation_probability,
+            
+            # os melhores resultados foram obtidos com a combinação elitismo = 3 e mutação = adjacent
+            mutation_type="adjacent",
+            n_elite=3,
         )
 
         generation_number = next(self.generation_counter)
