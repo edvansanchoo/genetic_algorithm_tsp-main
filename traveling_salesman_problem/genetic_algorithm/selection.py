@@ -6,7 +6,7 @@ from typing import List, Tuple
 import numpy as np
 
 from traveling_salesman_problem.genetic_algorithm.crossover import order_crossover
-from traveling_salesman_problem.genetic_algorithm.mutation import swap_adjacent_cities_mutation
+from traveling_salesman_problem.genetic_algorithm.mutation import apply_mutation
 
 CityCoordinate = Tuple[float, float]
 Route = List[CityCoordinate]
@@ -35,6 +35,7 @@ def evolve_next_generation(
     fitness_values: List[float],
     population_size: int,
     mutation_probability: float,
+    mutation_type: str = "adjacent", # seleciona o tipo de mutação adjacent/random
 ) -> List[Route]:
     """
     Produz a próxima geração com elitismo, cruzamento e mutação.
@@ -50,9 +51,10 @@ def evolve_next_generation(
             fitness_values,
         )
         child_route = order_crossover(first_parent, second_parent)
-        child_route = swap_adjacent_cities_mutation(
+        child_route = apply_mutation(
             child_route,
             mutation_probability,
+            mutation_type=mutation_type,
         )
         new_population.append(child_route)
 
