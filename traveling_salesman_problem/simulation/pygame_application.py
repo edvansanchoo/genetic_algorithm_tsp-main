@@ -44,6 +44,16 @@ def _draw_scrollable_sidebar(
     )
     simulation.mutation_slider.draw(content_surface)
     simulation.priority_weight_slider.draw(content_surface)
+    simulation.two_opt_toggle.draw(content_surface)
+
+    draw_section_header(
+        content_surface,
+        VisualTheme.control_margin,
+        simulation.section_scenario_y,
+        controls_width,
+        "Cenário",
+    )
+    simulation.scenario_selector.draw(content_surface)
 
     draw_section_header(
         content_surface,
@@ -118,12 +128,24 @@ def run_application(settings=None) -> None:
 
     while is_running:
         for event in pygame.event.get():
-            if sidebar_scroll.handle_event(event):
+            if event.type == pygame.MOUSEWHEEL:
+                if sidebar_scroll.is_mouse_in_viewport(pygame.mouse.get_pos()):
+                    content_position = sidebar_scroll.translate_position(pygame.mouse.get_pos())
+                    if simulation.scenario_selector.handle_wheel(event.y, content_position):
+                        continue
+                if sidebar_scroll.handle_event(event):
+                    continue
+            elif sidebar_scroll.handle_event(event):
                 continue
 
             if event.type == pygame.QUIT:
                 is_running = False
             elif event.type == pygame.VIDEORESIZE:
+                saved_scenario_id = simulation.active_scenario_id
+                saved_two_opt_active = simulation.two_opt_toggle.is_active
+                saved_mutation = simulation.mutation_slider.value
+                saved_priority_weight = simulation.priority_weight_slider.value
+
                 screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
 
                 settings = ApplicationSettings(
@@ -131,7 +153,16 @@ def run_application(settings=None) -> None:
                     window_height=event.h,
                 )
                 simulation = SimulationState(settings=settings)
+                simulation.active_scenario_id = saved_scenario_id
                 simulation.initialize()
+
+                simulation.two_opt_toggle.is_active = saved_two_opt_active
+                simulation.mutation_slider.value = saved_mutation
+                simulation.priority_weight_slider.value = saved_priority_weight
+                if saved_scenario_id != "random":
+                    simulation.apply_scenario(saved_scenario_id)
+                else:
+                    simulation.scenario_selector.set_active("random")
 
                 sidebar_scroll = SidebarScrollView(
                     viewport_top=settings.scroll_viewport_top,

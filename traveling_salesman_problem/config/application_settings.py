@@ -26,6 +26,7 @@ class ApplicationSettings:
     mutation_slider_height: int = 58
     count_slider_height: int = 48
     regenerate_button_height: int = 36
+    scenario_selector_viewport_height: int = 140
 
     @property
     def plot_horizontal_offset(self) -> int:
