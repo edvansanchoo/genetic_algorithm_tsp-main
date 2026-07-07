@@ -6,7 +6,8 @@ from typing import List, Tuple
 import numpy as np
 
 from traveling_salesman_problem.genetic_algorithm.crossover import order_crossover
-from traveling_salesman_problem.genetic_algorithm.mutation import swap_adjacent_cities_mutation
+from traveling_salesman_problem.genetic_algorithm.mutation import apply_mutation
+from traveling_salesman_problem.genetic_algorithm.fitness import add_2opt
 
 CityCoordinate = Tuple[float, float]
 Route = List[CityCoordinate]
@@ -35,6 +36,8 @@ def evolve_next_generation(
     fitness_values: List[float],
     population_size: int,
     mutation_probability: float,
+    mutation_type: str = "adjacent", # seleciona o tipo de mutação adjacent/random,
+    n_elite: int = 2, # elitismo para guardar "os melhores" para a próxima geração
 ) -> List[Route]:
     """
     Produz a próxima geração com elitismo, cruzamento e mutação.
@@ -50,10 +53,16 @@ def evolve_next_generation(
             fitness_values,
         )
         child_route = order_crossover(first_parent, second_parent)
-        child_route = swap_adjacent_cities_mutation(
+        child_route = apply_mutation(
             child_route,
             mutation_probability,
+            mutation_type=mutation_type,
         )
+
+        # 2-opt costuma reduzir drasticamente, achando boas rotas mais cedo
+        # em contrapartida 2-opt custa mais no processamento por geração
+        # child_route = add_2opt(child_route)
+
         new_population.append(child_route)
 
     return new_population

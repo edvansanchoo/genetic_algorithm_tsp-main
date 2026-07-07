@@ -97,7 +97,10 @@ def run_application(settings=None) -> None:
         settings = ApplicationSettings()
 
     pygame.init()
-    screen = pygame.display.set_mode((settings.window_width, settings.window_height))
+    screen = pygame.display.set_mode(
+        (settings.window_width, settings.window_height),
+        pygame.RESIZABLE,
+    )
     pygame.display.set_caption("Problema do Caixeiro Viajante · Algoritmo Genético")
     clock = pygame.time.Clock()
 
@@ -111,6 +114,8 @@ def run_application(settings=None) -> None:
     )
 
     is_running = True
+    fullscreen = False
+
     while is_running:
         for event in pygame.event.get():
             if sidebar_scroll.handle_event(event):
@@ -118,9 +123,33 @@ def run_application(settings=None) -> None:
 
             if event.type == pygame.QUIT:
                 is_running = False
+            elif event.type == pygame.VIDEORESIZE:
+                screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+
+                settings = ApplicationSettings(
+                    window_width=event.w,
+                    window_height=event.h,
+                )
+                simulation = SimulationState(settings=settings)
+                simulation.initialize()
+
+                sidebar_scroll = SidebarScrollView(
+                    viewport_top=settings.scroll_viewport_top,
+                    viewport_height=settings.scroll_viewport_height,
+                    content_width=settings.plot_horizontal_offset - VisualTheme.scrollbar_width - 8,
+                )
             elif event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_q, pygame.K_ESCAPE):
                     is_running = False
+                elif event.key == pygame.K_f:
+                    fullscreen = not fullscreen
+                    if fullscreen:
+                        screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                    else: 
+                        screen = pygame.display.set_mode(
+                            (settings.window_width, settings.window_height),
+                            pygame.RESIZABLE,
+                        )
                 else:
                     simulation.handle_control_events(event)
             elif event.type in (
@@ -158,6 +187,23 @@ def run_application(settings=None) -> None:
         )
 
         draw_application_chrome(screen, settings.window_width, settings.window_height)
+        draw_map_header(
+            screen,
+            settings.plot_horizontal_offset,
+            settings.window_width,
+            generation_number,
+            best_fitness,
+            best_distance,
+            best_weighted_priority,
+            simulation.priority_weight,
+            simulation.mutation_slider.value * 100,
+            simulation.terrain_control_panel.use_terrain_penalties,
+        )
+        draw_map_legend(
+            screen,
+            settings.window_width - 190,
+            VisualTheme.map_header_height + 12,
+        )
 
         draw_convergence_chart(
             screen,
