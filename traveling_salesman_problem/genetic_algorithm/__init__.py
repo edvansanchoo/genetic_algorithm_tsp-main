@@ -5,13 +5,23 @@ from traveling_salesman_problem.genetic_algorithm.population import (
     generate_random_population,
     sort_population_by_fitness,
 )
-from traveling_salesman_problem.genetic_algorithm.predefined_problems import predefined_city_problems
+from traveling_salesman_problem.genetic_algorithm.predefined_problems import (
+    SCENARIO_PRESETS,
+    ScenarioPreset,
+    get_scenario_city_count,
+    get_scenario_coordinates,
+    predefined_city_problems,
+)
 from traveling_salesman_problem.genetic_algorithm.selection import evolve_next_generation
 
 __all__ = [
+    "SCENARIO_PRESETS",
+    "ScenarioPreset",
     "calculate_route_fitness",
     "evolve_next_generation",
     "generate_random_population",
+    "get_scenario_city_count",
+    "get_scenario_coordinates",
     "order_crossover",
     "predefined_city_problems",
     "sort_population_by_fitness",
