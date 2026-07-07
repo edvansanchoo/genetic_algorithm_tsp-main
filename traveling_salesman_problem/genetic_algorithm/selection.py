@@ -38,6 +38,7 @@ def evolve_next_generation(
     mutation_probability: float,
     mutation_type: str = "adjacent", # seleciona o tipo de mutação adjacent/random,
     n_elite: int = 2, # elitismo para guardar "os melhores" para a próxima geração
+    use_2opt: bool = False,
 ) -> List[Route]:
     """
     Produz a próxima geração com elitismo, cruzamento e mutação.
@@ -61,7 +62,8 @@ def evolve_next_generation(
 
         # 2-opt costuma reduzir drasticamente, achando boas rotas mais cedo
         # em contrapartida 2-opt custa mais no processamento por geração
-        # child_route = add_2opt(child_route)
+        if use_2opt:
+            child_route = add_2opt(child_route)
 
         new_population.append(child_route)
 
