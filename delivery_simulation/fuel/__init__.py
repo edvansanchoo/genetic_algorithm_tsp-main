@@ -8,6 +8,7 @@ from delivery_simulation.fuel.models import (
     GasStation,
     RouteFuelReport,
 )
+from delivery_simulation.fuel.placement import place_gas_stations
 
 __all__ = [
     "FUEL_STATION_ID_PREFIX",
@@ -18,4 +19,5 @@ __all__ = [
     "FuelStopEvent",
     "GasStation",
     "RouteFuelReport",
+    "place_gas_stations",
 ]
