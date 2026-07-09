@@ -44,7 +44,7 @@ def _evaluate_population(
     ranked: list[tuple[float, TaskPermutation, List[Trip]]] = []
 
     for permutation in population:
-        distance, trips = evaluate_permutation(tasks, permutation, road_network)
+        distance, trips, _report = evaluate_permutation(tasks, permutation, road_network)
         fitness_values.append(distance if distance != float("inf") else float("inf"))
         if distance != float("inf"):
             ranked.append((distance, list(permutation), trips))
@@ -113,7 +113,9 @@ def initialize_vehicle_genetic(
 
     if best_distance == float("inf") and population:
         best_permutation = list(population[0])
-        best_distance, best_trips = evaluate_permutation(tasks, best_permutation, road_network)
+        best_distance, best_trips, _report = evaluate_permutation(
+            tasks, best_permutation, road_network
+        )
 
     state = VehicleGeneticState(
         vehicle_id=vehicle_id,

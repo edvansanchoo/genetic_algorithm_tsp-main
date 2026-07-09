@@ -43,6 +43,7 @@ class Stop:
     point_id: str
     items_delivered: int
     is_transit: bool = False
+    is_fuel_station: bool = False
 
 
 @dataclass
