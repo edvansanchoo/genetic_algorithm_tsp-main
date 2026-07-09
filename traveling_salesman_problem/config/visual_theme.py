@@ -50,6 +50,9 @@ class VisualTheme:
         (234, 88, 12),
         success,
     )
+    vehicle_line_styles = ("solid", "dashed", "dotted")
+    graph_edge_color = (120, 130, 140)
+    transit_fill = (150, 150, 150)
     depot_fill = (30, 64, 175)
     depot_stroke = (255, 255, 255)
 

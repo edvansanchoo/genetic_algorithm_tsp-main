@@ -14,6 +14,12 @@ class ApplicationSettings:
     initial_vehicle_count: int = 1
     initial_delivery_point_count: int = 2
     initial_total_items: int = 6
+    initial_transit_node_count: int = 8
+    initial_connection_radius: int = 150
+    minimum_transit_nodes: int = 3
+    maximum_transit_nodes: int = 15
+    minimum_connection_radius: int = 80
+    maximum_connection_radius: int = 250
 
     map_margin: int = 20
     delivery_point_radius: int = 9
@@ -21,7 +27,12 @@ class ApplicationSettings:
 
     count_slider_height: int = 48
     action_button_height: int = 36
-    summary_panel_height: int = 400
+    summary_panel_height: int = 0
+
+    population_size: int = 100
+    initial_mutation_probability: float = 0.01
+    mutation_slider_height: int = 58
+    generations_per_second: float = 3.0
 
     @property
     def plot_horizontal_offset(self) -> int:

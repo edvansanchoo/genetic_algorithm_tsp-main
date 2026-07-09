@@ -12,9 +12,20 @@ def _format_stop_chain(stops) -> str:
     for stop in stops:
         if stop.point_id == DEPOT_ID:
             parts.append("D")
+        elif stop.is_transit or stop.point_id.startswith("T"):
+            parts.append(stop.point_id)
         else:
             parts.append(f"{stop.point_id}({stop.items_delivered})")
     return " → ".join(parts)
+
+
+def _transit_nodes_in_trip(stops) -> str:
+    transit_ids = [
+        stop.point_id
+        for stop in stops
+        if stop.is_transit or (stop.point_id.startswith("T") and stop.items_delivered == 0)
+    ]
+    return ", ".join(transit_ids) if transit_ids else "—"
 
 
 def format_simulation_result(result: SimulationResult) -> list[str]:
@@ -22,6 +33,7 @@ def format_simulation_result(result: SimulationResult) -> list[str]:
     lines = [
         "── Configuração ──",
         f"Veículos: {config.vehicle_count} | Pontos: {config.delivery_point_count} | Itens: {config.total_items}",
+        f"Trânsito: {len(result.transit_nodes)} nós | Raio: {result.road_network.connection_radius:.0f} px",
         "",
         "── Pontos ──",
     ]
@@ -42,7 +54,12 @@ def format_simulation_result(result: SimulationResult) -> list[str]:
         )
         for trip_index, trip in enumerate(vehicle.trips, start=1):
             route_text = _format_stop_chain(trip.stops)
+            load = sum(
+                stop.items_delivered for stop in trip.stops if stop.point_id != DEPOT_ID
+            )
+            transit = _transit_nodes_in_trip(trip.stops)
             lines.append(f"  Viagem {trip_index}: {route_text}  [{trip.distance:.0f} px]")
+            lines.append(f"    Carga: {load}/10 | Trânsito: {transit}")
 
     lines.extend(["", f"── Total do sistema: {result.total_system_distance:.0f} px ──"])
     return lines

@@ -8,6 +8,7 @@ from traveling_salesman_problem.visualization.widgets.obstacle_control_panel imp
 )
 from traveling_salesman_problem.visualization.widgets.scenario_selector import ScenarioSelector
 from traveling_salesman_problem.visualization.widgets.toggle_button import ToggleButton
+from traveling_salesman_problem.visualization.widgets.trip_selector import TripSelector
 
 __all__ = [
     "ActionButton",
@@ -18,4 +19,5 @@ __all__ = [
     "ScenarioSelector",
     "TerrainControlPanel",
     "ToggleButton",
+    "TripSelector",
 ]

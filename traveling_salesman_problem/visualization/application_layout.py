@@ -117,6 +117,10 @@ def draw_delivery_map_header(
     map_start_x: int,
     window_width: int,
     total_distance: float | None,
+    generation_number: int | None = None,
+    active_vehicle_id: int | None = None,
+    best_distance: float | None = None,
+    second_best_distance: float | None = None,
 ) -> None:
     header_rectangle = pygame.Rect(
         map_start_x,
@@ -142,7 +146,16 @@ def draw_delivery_map_header(
         (map_start_x + 16, 10),
     )
 
-    subtitle = "Roteamento guloso · Configure e simule" if total_distance is None else "Roteamento guloso"
+    if generation_number is not None and active_vehicle_id is not None:
+        parts = [f"Gen {generation_number}", f"V{active_vehicle_id}"]
+        display_best = best_distance if best_distance is not None else total_distance
+        if display_best is not None:
+            parts.append(f"melhor {display_best:.0f} px")
+        if second_best_distance is not None and second_best_distance < float("inf"):
+            parts.append(f"2ª {second_best_distance:.0f} px")
+        subtitle = " · ".join(parts)
+    else:
+        subtitle = "Roteamento guloso · Configure e simule" if total_distance is None else "Roteamento guloso"
     screen.blit(
         muted_font.render(subtitle, True, VisualTheme.text_muted),
         (map_start_x + 16, 28),
@@ -178,6 +191,79 @@ def draw_results_panel(
     for line in result_lines:
         screen.blit(row_font.render(line, True, VisualTheme.text_primary), (position_x, current_y))
         current_y += 14
+
+    return current_y + 4
+
+
+def draw_trip_detail_panel(
+    screen: pygame.Surface,
+    simulation_result,
+    active_vehicle_id: int,
+    active_trip_index: int,
+    view_mode: str,
+    position_x: int,
+    position_y: int,
+    width: int,
+) -> int:
+    title_font = get_user_interface_font(11, bold=True)
+    body_font = get_monospace_font(10)
+    current_y = position_y
+
+    vehicle = simulation_result.vehicles[active_vehicle_id - 1]
+    if view_mode == "all":
+        title = f"Veículo {active_vehicle_id} · todas as viagens ({len(vehicle.trips)})"
+    else:
+        trip_number = active_trip_index + 1 if vehicle.trips else 0
+        title = f"Veículo {active_vehicle_id} · viagem {trip_number}"
+
+    screen.blit(title_font.render(title, True, VisualTheme.text_primary), (position_x, current_y))
+    current_y += 18
+
+    if not vehicle.trips:
+        screen.blit(body_font.render("Nenhuma viagem registrada.", True, VisualTheme.text_muted), (position_x, current_y))
+        return current_y + 16
+
+    trips = vehicle.trips if view_mode == "all" else [vehicle.trips[active_trip_index]]
+    for trip_index, trip in enumerate(trips):
+        if view_mode == "all":
+            screen.blit(
+                body_font.render(f"Viagem {trip_index + 1} · {trip.distance:.0f} px", True, VisualTheme.text_muted),
+                (position_x, current_y),
+            )
+            current_y += 14
+
+        stop_labels = []
+        for stop in trip.stops:
+            if stop.is_transit:
+                stop_labels.append(stop.point_id)
+            elif stop.items_delivered > 0:
+                stop_labels.append(f"{stop.point_id}({stop.items_delivered})")
+            else:
+                stop_labels.append(stop.point_id)
+
+        route_text = " → ".join(stop_labels)
+        wrapped_lines = []
+        while route_text:
+            if body_font.size(route_text)[0] <= width:
+                wrapped_lines.append(route_text)
+                break
+            split_at = max(route_text.rfind(" → ", 0, len(route_text) * width // body_font.size(route_text)[0]), 1)
+            wrapped_lines.append(route_text[:split_at])
+            route_text = route_text[split_at:].lstrip("→ ")
+
+        for line in wrapped_lines:
+            screen.blit(body_font.render(line, True, VisualTheme.text_primary), (position_x, current_y))
+            current_y += 14
+
+        if view_mode == "single":
+            screen.blit(
+                body_font.render(f"Distância: {trip.distance:.0f} px", True, VisualTheme.text_muted),
+                (position_x, current_y),
+            )
+            current_y += 14
+
+        if view_mode == "all" and trip_index < len(trips) - 1:
+            current_y += 4
 
     return current_y + 4
 

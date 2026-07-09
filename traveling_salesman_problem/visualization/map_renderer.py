@@ -133,13 +133,131 @@ def draw_route_visit_positions(
 
 def _coordinate_for_stop(
     stop_point_id: str,
-    depot: Tuple[float, float],
-    delivery_points,
+    road_network,
 ) -> Tuple[int, int]:
-    if stop_point_id == "DEPOT":
-        return (int(depot[0]), int(depot[1]))
-    point = next(item for item in delivery_points if item.id == stop_point_id)
-    return (int(point.coordinate[0]), int(point.coordinate[1]))
+    coordinate = road_network.nodes[stop_point_id]
+    return (int(coordinate[0]), int(coordinate[1]))
+
+
+def draw_road_network(screen: pygame.Surface, road_network) -> None:
+    drawn = set()
+    for node_a, node_b in road_network.edges:
+        key = tuple(sorted((node_a, node_b)))
+        if key in drawn:
+            continue
+        drawn.add(key)
+        start = _coordinate_for_stop(node_a, road_network)
+        end = _coordinate_for_stop(node_b, road_network)
+        pygame.draw.line(screen, VisualTheme.graph_edge_color, start, end, 1)
+
+
+def draw_transit_nodes(screen: pygame.Surface, transit_nodes) -> None:
+    label_font = get_user_interface_font(9, bold=True)
+    for node in transit_nodes:
+        center = (int(node.coordinate[0]), int(node.coordinate[1]))
+        pygame.draw.circle(screen, VisualTheme.transit_fill, center, 6)
+        label = label_font.render(node.id, True, VisualTheme.text_primary)
+        screen.blit(label, label.get_rect(center=(center[0], center[1] - 12)))
+
+
+def _draw_styled_route(
+    screen: pygame.Surface,
+    coordinates: List[Tuple[int, int]],
+    line_color: Tuple[int, int, int],
+    style: str,
+    line_width: int = 4,
+    alpha: int = 255,
+) -> None:
+    if len(coordinates) < 2:
+        return
+    color = line_color
+    if alpha < 255:
+        color = tuple(int(channel * alpha / 255) for channel in line_color)
+
+    if style == "solid":
+        pygame.draw.lines(screen, color, False, coordinates, width=line_width)
+        return
+
+    dash = 10 if style == "dashed" else 4
+    gap = 6 if style == "dashed" else 4
+    for index in range(len(coordinates) - 1):
+        start = coordinates[index]
+        end = coordinates[index + 1]
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length = math.hypot(dx, dy)
+        if length == 0:
+            continue
+        steps = int(length / (dash + gap)) + 1
+        for step in range(steps):
+            t0 = step * (dash + gap) / length
+            t1 = min((step * (dash + gap) + dash) / length, 1.0)
+            if t0 >= 1.0:
+                break
+            p0 = (int(start[0] + dx * t0), int(start[1] + dy * t0))
+            p1 = (int(start[0] + dx * t1), int(start[1] + dy * t1))
+            pygame.draw.line(screen, color, p0, p1, line_width)
+
+
+def _trips_to_coordinates(trips, road_network) -> List[List[Tuple[int, int]]]:
+    return [
+        [_coordinate_for_stop(stop.point_id, road_network) for stop in trip.stops]
+        for trip in trips
+    ]
+
+
+def draw_vehicle_evolution_routes(
+    screen: pygame.Surface,
+    road_network,
+    best_trips,
+    second_best_trips,
+    color: Tuple[int, int, int],
+) -> None:
+    if second_best_trips:
+        for coordinates in _trips_to_coordinates(second_best_trips, road_network):
+            muted = tuple(int(channel * 0.5) for channel in color)
+            _draw_styled_route(screen, coordinates, muted, "dashed", line_width=2, alpha=128)
+            draw_route_direction_arrows_for_coordinates(screen, coordinates, muted)
+
+    for coordinates in _trips_to_coordinates(best_trips, road_network):
+        _draw_styled_route(screen, coordinates, color, "solid", line_width=4)
+        draw_route_direction_arrows_for_coordinates(screen, coordinates, color)
+
+
+def draw_selected_routes(
+    screen: pygame.Surface,
+    simulation_result,
+    active_vehicle_id: int,
+    active_trip_index: int,
+    view_mode: str,
+    base_colors: Tuple[Tuple[int, int, int], ...],
+    line_styles: Tuple[str, ...],
+) -> None:
+    vehicle = simulation_result.vehicles[active_vehicle_id - 1]
+    color = base_colors[(active_vehicle_id - 1) % len(base_colors)]
+    style = line_styles[(active_vehicle_id - 1) % len(line_styles)]
+
+    if view_mode == "all":
+        trip_count = len(vehicle.trips)
+        for trip_index, trip in enumerate(vehicle.trips):
+            alpha = 255 - trip_index * (180 // max(trip_count, 1))
+            coordinates = [
+                _coordinate_for_stop(stop.point_id, simulation_result.road_network)
+                for stop in trip.stops
+            ]
+            _draw_styled_route(screen, coordinates, color, style, alpha=max(alpha, 80))
+            draw_route_direction_arrows_for_coordinates(screen, coordinates, color)
+        return
+
+    if not vehicle.trips or active_trip_index >= len(vehicle.trips):
+        return
+    trip = vehicle.trips[active_trip_index]
+    coordinates = [
+        _coordinate_for_stop(stop.point_id, simulation_result.road_network)
+        for stop in trip.stops
+    ]
+    _draw_styled_route(screen, coordinates, color, style)
+    draw_route_direction_arrows_for_coordinates(screen, coordinates, color)
 
 
 def draw_depot(screen: pygame.Surface, depot: Tuple[float, float], half_size: int) -> None:
@@ -171,34 +289,6 @@ def draw_delivery_points(
         count_surface = count_font.render(f"{point.total_items} itens", True, VisualTheme.text_muted)
         count_rect = count_surface.get_rect(center=(center[0], center[1] - node_radius - 10))
         screen.blit(count_surface, count_rect)
-
-
-def _draw_open_route(
-    screen: pygame.Surface,
-    coordinates: List[Tuple[int, int]],
-    line_color: Tuple[int, int, int],
-    line_width: int = 2,
-) -> None:
-    if len(coordinates) < 2:
-        return
-    pygame.draw.lines(screen, line_color, False, coordinates, width=line_width)
-
-
-def draw_vehicle_routes(
-    screen: pygame.Surface,
-    simulation_result,
-    base_colors: Tuple[Tuple[int, int, int], ...],
-) -> None:
-    for vehicle_index, vehicle in enumerate(simulation_result.vehicles):
-        color = base_colors[vehicle_index % len(base_colors)]
-        for trip_index, trip in enumerate(vehicle.trips):
-            coordinates = [
-                _coordinate_for_stop(stop.point_id, simulation_result.depot, simulation_result.delivery_points)
-                for stop in trip.stops
-            ]
-            route_color = color if trip_index % 2 == 0 else tuple(max(0, channel - 40) for channel in color)
-            _draw_open_route(screen, coordinates, route_color, line_width=3)
-            draw_route_direction_arrows_for_coordinates(screen, coordinates, route_color)
 
 
 def draw_route_direction_arrows_for_coordinates(
@@ -252,16 +342,18 @@ def draw_vehicle_legend(
     screen: pygame.Surface,
     vehicle_count: int,
     base_colors: Tuple[Tuple[int, int, int], ...],
+    line_styles: Tuple[str, ...],
     position_x: int,
     position_y: int,
 ) -> None:
     legend_items = [
-        (base_colors[index], f"Veículo {index + 1}") for index in range(vehicle_count)
+        (base_colors[index], line_styles[index % len(line_styles)], f"Veículo {index + 1}")
+        for index in range(vehicle_count)
     ]
     padding = 10
     row_height = 18
     label_font = get_user_interface_font(11)
-    panel_width = 140
+    panel_width = 160
     panel_height = padding * 2 + row_height * len(legend_items)
     panel_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
     panel_surface.fill((255, 255, 255, 235))
@@ -273,15 +365,20 @@ def draw_vehicle_legend(
         border_radius=6,
     )
 
-    for index, (color, label) in enumerate(legend_items):
+    for index, (color, style, label) in enumerate(legend_items):
         item_y = padding + index * row_height
-        pygame.draw.line(
-            panel_surface,
-            color,
-            (padding, item_y + 8),
-            (padding + 16, item_y + 8),
-            width=3,
-        )
+        line_start = (padding, item_y + 8)
+        line_end = (padding + 16, item_y + 8)
+        if style == "solid":
+            pygame.draw.line(panel_surface, color, line_start, line_end, width=3)
+        else:
+            dash = 4 if style == "dotted" else 6
+            gap = 3 if style == "dotted" else 4
+            x = line_start[0]
+            while x < line_end[0]:
+                segment_end = min(x + dash, line_end[0])
+                pygame.draw.line(panel_surface, color, (x, line_start[1]), (segment_end, line_start[1]), width=3)
+                x += dash + gap
         panel_surface.blit(
             label_font.render(label, True, VisualTheme.text_muted),
             (padding + 22, item_y),
