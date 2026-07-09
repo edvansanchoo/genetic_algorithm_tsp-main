@@ -22,6 +22,8 @@ from delivery_simulation import (
     run_simulation,
     run_vehicle_generation,
 )
+from delivery_simulation.fuel.models import GasStation
+from delivery_simulation.fuel.placement import place_gas_stations
 from delivery_simulation.road_network import ensure_connectivity
 from delivery_simulation.models import Coordinate, DEPOT_ID, Vehicle
 from delivery_simulation.vehicle_genetic import VehicleGeneticState
@@ -46,6 +48,7 @@ class SimulationState:
     delivery_points: List[DeliveryPoint] = field(default_factory=list)
     road_network: Optional[RoadNetwork] = None
     transit_nodes: List[TransitNode] = field(default_factory=list)
+    gas_stations: List[GasStation] = field(default_factory=list)
     positions_ready: bool = False
     simulation_result: Optional[SimulationResult] = None
     best_simulation_result: Optional[SimulationResult] = None
@@ -62,6 +65,7 @@ class SimulationState:
     total_items_slider: Optional[DiscreteSlider] = None
     transit_count_slider: Optional[IntegerSlider] = None
     connection_radius_slider: Optional[IntegerSlider] = None
+    gas_station_count_slider: Optional[IntegerSlider] = None
     mutation_slider: Optional[MutationSlider] = None
     shuffle_positions_button: Optional[ActionButton] = None
     simulate_button: Optional[ActionButton] = None
@@ -77,6 +81,7 @@ class SimulationState:
     _last_total_items: int = 0
     _last_transit_count: int = 0
     _last_connection_radius: int = 0
+    _last_gas_station_count: int = 0
 
     def initialize(self) -> None:
         self._create_control_widgets()
@@ -117,6 +122,14 @@ class SimulationState:
             settings.minimum_connection_radius,
             settings.maximum_connection_radius,
             "Raio de conexão (px)",
+        )
+        y += settings.count_slider_height + 12
+        self.gas_station_count_slider = IntegerSlider(
+            VisualTheme.control_margin, y, controls_width, settings.count_slider_height,
+            settings.initial_gas_station_count,
+            settings.minimum_gas_stations,
+            settings.maximum_gas_stations,
+            "Postos",
         )
         y += settings.count_slider_height + 12
         self.mutation_slider = MutationSlider(
@@ -305,6 +318,7 @@ class SimulationState:
         ]
 
         delivery_ids = [point.id for point in self.delivery_points]
+        station_count = self.gas_station_count_slider.integer_value
         warning = None
 
         for _ in range(50):
@@ -321,12 +335,26 @@ class SimulationState:
             for node in transit:
                 nodes[node.id] = node.coordinate
 
+            stations = place_gas_stations(
+                station_count,
+                dict(nodes),
+                settings.map_minimum_x,
+                settings.map_minimum_y,
+                settings.map_maximum_x,
+                settings.map_maximum_y,
+                connection_radius=radius,
+            )
+            for station in stations:
+                nodes[station.id] = station.coordinate
+
             network, warning = build_connected_network(nodes, radius, DEPOT_ID, delivery_ids)
             if ensure_connectivity(network, DEPOT_ID, delivery_ids):
                 self.transit_nodes = transit
+                self.gas_stations = stations
                 self.road_network = network
                 break
             self.transit_nodes = transit
+            self.gas_stations = stations
             self.road_network = network
         else:
             self.status_message = warning or "Rede gerada com arestas extras de fallback."
@@ -378,6 +406,7 @@ class SimulationState:
         self.total_items_slider.handle_event(event)
         self.transit_count_slider.handle_event(event)
         self.connection_radius_slider.handle_event(event)
+        self.gas_station_count_slider.handle_event(event)
         self.mutation_slider.handle_event(event)
         self.shuffle_positions_button.handle_event(event)
         if self.can_simulate():
@@ -407,6 +436,7 @@ class SimulationState:
             self.delivery_points = []
             self.road_network = None
             self.transit_nodes = []
+            self.gas_stations = []
             self.status_message = "Configuração de rede alterada. Sorteie posições novamente."
             self._sync_slider_snapshots()
             return
@@ -419,6 +449,7 @@ class SimulationState:
                 self.delivery_points = []
                 self.road_network = None
                 self.transit_nodes = []
+                self.gas_stations = []
                 self.status_message = "Quantidade de pontos alterada. Sorteie posições novamente."
             self._sync_slider_snapshots()
 
@@ -426,6 +457,7 @@ class SimulationState:
         return (
             self.transit_count_slider.integer_value != self._last_transit_count
             or self.connection_radius_slider.integer_value != self._last_connection_radius
+            or self.gas_station_count_slider.integer_value != self._last_gas_station_count
         )
 
     def _delivery_config_changed(self) -> bool:
@@ -441,6 +473,7 @@ class SimulationState:
         self._last_total_items = self.total_items_slider.selected_value
         self._last_transit_count = self.transit_count_slider.integer_value
         self._last_connection_radius = self.connection_radius_slider.integer_value
+        self._last_gas_station_count = self.gas_station_count_slider.integer_value
 
     def active_result(self) -> Optional[SimulationResult]:
         return self.best_simulation_result or self.simulation_result

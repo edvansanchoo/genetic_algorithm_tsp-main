@@ -20,6 +20,9 @@ class ApplicationSettings:
     maximum_transit_nodes: int = 15
     minimum_connection_radius: int = 80
     maximum_connection_radius: int = 250
+    initial_gas_station_count: int = 3
+    minimum_gas_stations: int = 0
+    maximum_gas_stations: int = 6
 
     map_margin: int = 20
     delivery_point_radius: int = 9

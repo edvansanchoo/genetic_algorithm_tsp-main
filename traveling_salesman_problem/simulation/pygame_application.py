@@ -48,6 +48,7 @@ def _draw_scrollable_sidebar(
     simulation.total_items_slider.draw(content_surface)
     simulation.transit_count_slider.draw(content_surface)
     simulation.connection_radius_slider.draw(content_surface)
+    simulation.gas_station_count_slider.draw(content_surface)
     simulation.mutation_slider.draw(content_surface)
 
     draw_section_header(
