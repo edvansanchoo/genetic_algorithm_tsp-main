@@ -55,6 +55,8 @@ class VisualTheme:
     transit_fill = (150, 150, 150)
     depot_fill = (30, 64, 175)
     depot_stroke = (255, 255, 255)
+    gas_station_fill = (217, 119, 6)
+    gas_station_stroke = (255, 255, 255)
 
     obstacle_fill = (254, 202, 202, 140)
     obstacle_border = (239, 68, 68)

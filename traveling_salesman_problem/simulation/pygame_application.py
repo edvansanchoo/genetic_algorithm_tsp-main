@@ -11,6 +11,7 @@ from traveling_salesman_problem.simulation.simulation_state import SimulationSta
 from traveling_salesman_problem.visualization.application_layout import (
     draw_application_chrome,
     draw_delivery_map_header,
+    draw_fuel_log_panel,
     draw_results_panel,
     draw_section_header,
     draw_sidebar_footer,
@@ -20,6 +21,7 @@ from traveling_salesman_problem.visualization.convergence_chart import draw_conv
 from traveling_salesman_problem.visualization.map_renderer import (
     draw_delivery_points,
     draw_depot,
+    draw_gas_stations,
     draw_road_network,
     draw_selected_routes,
     draw_transit_nodes,
@@ -100,7 +102,18 @@ def _draw_scrollable_sidebar(
             detail_y,
             controls_width,
         )
-        results_y = detail_bottom + 12
+        genetic = simulation.active_vehicle_genetic_state()
+        fuel_report = genetic.best_fuel_report if genetic is not None else None
+        fuel_bottom = draw_fuel_log_panel(
+            content_surface,
+            fuel_report,
+            VisualTheme.control_margin,
+            detail_bottom + 8,
+            controls_width,
+        )
+        results_y = fuel_bottom + 12
+    else:
+        results_y = simulation.section_results_y
 
     draw_section_header(
         content_surface,
@@ -160,6 +173,7 @@ def run_application(settings=None) -> None:
                 saved_total_items = simulation.total_items_slider.selected_value
                 saved_transit_count = simulation.transit_count_slider.integer_value
                 saved_connection_radius = simulation.connection_radius_slider.integer_value
+                saved_gas_stations = simulation.gas_station_count_slider.integer_value
                 saved_mutation = simulation.mutation_slider.value
 
                 screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
@@ -174,6 +188,7 @@ def run_application(settings=None) -> None:
                 simulation.total_items_slider.value = float(saved_total_items)
                 simulation.transit_count_slider.value = float(saved_transit_count)
                 simulation.connection_radius_slider.value = float(saved_connection_radius)
+                simulation.gas_station_count_slider.value = float(saved_gas_stations)
                 simulation.mutation_slider.value = saved_mutation
 
                 sidebar_scroll = SidebarScrollView(
@@ -245,6 +260,13 @@ def run_application(settings=None) -> None:
         draw_sidebar_footer(screen, settings.sidebar_footer_y)
 
         genetic = simulation.active_vehicle_genetic_state()
+        fuel_label = None
+        if genetic is not None and genetic.best_fuel_report is not None:
+            report = genetic.best_fuel_report
+            if not report.is_feasible:
+                fuel_label = "Comb inválida"
+            else:
+                fuel_label = f"Comb {report.final_fuel:.0f}/150"
         draw_delivery_map_header(
             screen,
             settings.plot_horizontal_offset,
@@ -258,12 +280,15 @@ def run_application(settings=None) -> None:
             ),
             best_distance=genetic.best_distance if genetic is not None else None,
             second_best_distance=genetic.second_best_distance if genetic is not None else None,
+            fuel_label=fuel_label,
         )
 
         if simulation.road_network is not None:
             draw_road_network(screen, simulation.road_network)
         if simulation.transit_nodes:
             draw_transit_nodes(screen, simulation.transit_nodes)
+        if simulation.gas_stations:
+            draw_gas_stations(screen, simulation.gas_stations)
         if simulation.depot is not None:
             draw_depot(screen, simulation.depot, settings.depot_half_size)
         if simulation.delivery_points:

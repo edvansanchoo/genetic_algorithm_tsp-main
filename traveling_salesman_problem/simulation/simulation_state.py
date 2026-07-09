@@ -489,11 +489,13 @@ class SimulationState:
         status_height = 20 if self.status_message else 0
         if self.active_result() is not None:
             detail_height = 80
+            fuel_log_height = 120
             return (
                 self.section_visualization_y
                 + 26
                 + self.trip_selector.height
                 + detail_height
+                + fuel_log_height
                 + results_height
                 + status_height
             )

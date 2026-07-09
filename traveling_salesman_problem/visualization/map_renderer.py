@@ -160,6 +160,16 @@ def draw_transit_nodes(screen: pygame.Surface, transit_nodes) -> None:
         screen.blit(label, label.get_rect(center=(center[0], center[1] - 12)))
 
 
+def draw_gas_stations(screen: pygame.Surface, gas_stations) -> None:
+    label_font = get_user_interface_font(9, bold=True)
+    for station in gas_stations:
+        center = (int(station.coordinate[0]), int(station.coordinate[1]))
+        pygame.draw.circle(screen, VisualTheme.gas_station_fill, center, 8)
+        pygame.draw.circle(screen, VisualTheme.gas_station_stroke, center, 8, 2)
+        label = label_font.render(station.id, True, VisualTheme.text_primary)
+        screen.blit(label, label.get_rect(center=(center[0], center[1] - 14)))
+
+
 def _draw_styled_route(
     screen: pygame.Surface,
     coordinates: List[Tuple[int, int]],

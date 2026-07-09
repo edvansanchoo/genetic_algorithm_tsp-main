@@ -121,6 +121,7 @@ def draw_delivery_map_header(
     active_vehicle_id: int | None = None,
     best_distance: float | None = None,
     second_best_distance: float | None = None,
+    fuel_label: str | None = None,
 ) -> None:
     header_rectangle = pygame.Rect(
         map_start_x,
@@ -153,9 +154,13 @@ def draw_delivery_map_header(
             parts.append(f"melhor {display_best:.0f} px")
         if second_best_distance is not None and second_best_distance < float("inf"):
             parts.append(f"2ª {second_best_distance:.0f} px")
+        if fuel_label:
+            parts.append(fuel_label)
         subtitle = " · ".join(parts)
     else:
         subtitle = "Roteamento guloso · Configure e simule" if total_distance is None else "Roteamento guloso"
+        if fuel_label:
+            subtitle = f"{subtitle} · {fuel_label}"
     screen.blit(
         muted_font.render(subtitle, True, VisualTheme.text_muted),
         (map_start_x + 16, 28),
@@ -168,6 +173,64 @@ def draw_delivery_map_header(
             midright=(window_width - 16, VisualTheme.map_header_height // 2 + 2),
         )
         screen.blit(statistics_surface, statistics_rectangle)
+
+
+def draw_fuel_log_panel(
+    screen: pygame.Surface,
+    report,
+    position_x: int,
+    position_y: int,
+    width: int,
+) -> int:
+    title_font = get_user_interface_font(11, bold=True)
+    body_font = get_monospace_font(10)
+    current_y = position_y
+
+    screen.blit(
+        title_font.render("LOG DE COMBUSTÍVEL", True, VisualTheme.text_primary),
+        (position_x, current_y),
+    )
+    current_y += 16
+
+    if report is None:
+        screen.blit(
+            body_font.render("Sem dados de combustível.", True, VisualTheme.text_muted),
+            (position_x, current_y),
+        )
+        return current_y + 16
+
+    if not report.is_feasible:
+        screen.blit(
+            body_font.render("Rota inviável (combustível).", True, VisualTheme.accent),
+            (position_x, current_y),
+        )
+        current_y += 14
+
+    if not report.legs:
+        screen.blit(
+            body_font.render("Sem trechos registrados.", True, VisualTheme.text_muted),
+            (position_x, current_y),
+        )
+        return current_y + 16
+
+    stop_by_arrival = {event.station_id: event for event in report.stops}
+    for leg in report.legs:
+        line = (
+            f"T{leg.leg_index + 1:02d} · {leg.from_node_id} → {leg.to_node_id}  "
+            f"dist {leg.distance:.0f}  {leg.fuel_before:.0f}→{leg.fuel_after:.0f}"
+        )
+        screen.blit(body_font.render(line[: max(10, width // 6)], True, VisualTheme.text_primary), (position_x, current_y))
+        current_y += 14
+        event = stop_by_arrival.get(leg.to_node_id)
+        if event is not None and leg.to_node_id == event.station_id:
+            refill = (
+                f"     posto {event.station_id}: "
+                f"{event.fuel_on_arrival:.0f} → {event.fuel_on_departure:.0f}"
+            )
+            screen.blit(body_font.render(refill, True, VisualTheme.text_muted), (position_x, current_y))
+            current_y += 14
+
+    return current_y + 4
 
 
 def draw_results_panel(
@@ -234,7 +297,9 @@ def draw_trip_detail_panel(
 
         stop_labels = []
         for stop in trip.stops:
-            if stop.is_transit:
+            if stop.is_fuel_station:
+                stop_labels.append(f"{stop.point_id}⛽")
+            elif stop.is_transit:
                 stop_labels.append(stop.point_id)
             elif stop.items_delivered > 0:
                 stop_labels.append(f"{stop.point_id}({stop.items_delivered})")

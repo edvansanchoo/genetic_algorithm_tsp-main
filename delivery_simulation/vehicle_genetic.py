@@ -4,6 +4,7 @@ import random
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from delivery_simulation.fuel.models import RouteFuelReport
 from delivery_simulation.models import DeliveryTask, RoadNetwork, Trip
 from delivery_simulation.route_evaluator import TaskPermutation, evaluate_permutation
 from traveling_salesman_problem.genetic_algorithm.population import sort_population_by_fitness
@@ -20,6 +21,7 @@ class VehicleGeneticState:
     best_distance: float = field(default_factory=lambda: float("inf"))
     best_permutation: TaskPermutation = field(default_factory=list)
     best_trips: List[Trip] = field(default_factory=list)
+    best_fuel_report: Optional[RouteFuelReport] = None
     second_best_distance: float = field(default_factory=lambda: float("inf"))
     second_best_permutation: TaskPermutation = field(default_factory=list)
     second_best_trips: List[Trip] = field(default_factory=list)
@@ -39,24 +41,33 @@ def _evaluate_population(
     tasks: List[DeliveryTask],
     population: TaskPopulation,
     road_network: RoadNetwork,
-) -> tuple[list[float], TaskPermutation, float, List[Trip], TaskPermutation, float, List[Trip]]:
+) -> tuple[
+    list[float],
+    TaskPermutation,
+    float,
+    List[Trip],
+    Optional[RouteFuelReport],
+    TaskPermutation,
+    float,
+    List[Trip],
+]:
     fitness_values: list[float] = []
-    ranked: list[tuple[float, TaskPermutation, List[Trip]]] = []
+    ranked: list[tuple[float, TaskPermutation, List[Trip], RouteFuelReport]] = []
 
     for permutation in population:
-        distance, trips, _report = evaluate_permutation(tasks, permutation, road_network)
+        distance, trips, report = evaluate_permutation(tasks, permutation, road_network)
         fitness_values.append(distance if distance != float("inf") else float("inf"))
         if distance != float("inf"):
-            ranked.append((distance, list(permutation), trips))
+            ranked.append((distance, list(permutation), trips, report))
 
     ranked.sort(key=lambda item: item[0])
     if not ranked:
         empty: TaskPermutation = []
-        return fitness_values, empty, float("inf"), [], empty, float("inf"), []
+        return fitness_values, empty, float("inf"), [], None, empty, float("inf"), []
 
-    best_distance, best_permutation, best_trips = ranked[0]
+    best_distance, best_permutation, best_trips, best_report = ranked[0]
     second_distance, second_permutation, second_trips = float("inf"), [], []
-    for distance, permutation, trips in ranked[1:]:
+    for distance, permutation, trips, _report in ranked[1:]:
         if permutation != best_permutation:
             second_distance, second_permutation, second_trips = distance, permutation, trips
             break
@@ -66,6 +77,7 @@ def _evaluate_population(
         best_permutation,
         best_distance,
         best_trips,
+        best_report,
         second_permutation,
         second_distance,
         second_trips,
@@ -77,6 +89,7 @@ def _apply_generation_best(
     best_permutation: TaskPermutation,
     best_distance: float,
     best_trips: List[Trip],
+    best_fuel_report: Optional[RouteFuelReport],
     second_permutation: TaskPermutation,
     second_distance: float,
     second_trips: List[Trip],
@@ -85,6 +98,7 @@ def _apply_generation_best(
         state.best_distance = best_distance
         state.best_permutation = best_permutation
         state.best_trips = best_trips
+        state.best_fuel_report = best_fuel_report
 
     if second_distance < float("inf"):
         state.second_best_distance = second_distance
@@ -106,6 +120,7 @@ def initialize_vehicle_genetic(
         best_permutation,
         best_distance,
         best_trips,
+        best_report,
         second_permutation,
         second_distance,
         second_trips,
@@ -113,7 +128,7 @@ def initialize_vehicle_genetic(
 
     if best_distance == float("inf") and population:
         best_permutation = list(population[0])
-        best_distance, best_trips, _report = evaluate_permutation(
+        best_distance, best_trips, best_report = evaluate_permutation(
             tasks, best_permutation, road_network
         )
 
@@ -124,12 +139,14 @@ def initialize_vehicle_genetic(
         best_distance=best_distance,
         best_permutation=best_permutation,
         best_trips=best_trips,
+        best_fuel_report=best_report,
     )
     _apply_generation_best(
         state,
         best_permutation,
         best_distance,
         best_trips,
+        best_report,
         second_permutation,
         second_distance,
         second_trips,
@@ -152,6 +169,7 @@ def run_vehicle_generation(
         best_permutation,
         best_distance,
         best_trips,
+        best_report,
         second_permutation,
         second_distance,
         second_trips,
@@ -167,6 +185,7 @@ def run_vehicle_generation(
         best_permutation,
         best_distance,
         best_trips,
+        best_report,
         second_permutation,
         second_distance,
         second_trips,
