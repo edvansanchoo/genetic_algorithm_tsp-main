@@ -1,6 +1,9 @@
 """Simulador guloso de distribuição de entregas."""
 
 from delivery_simulation.assignment import extract_vehicle_assignments, run_simulation
+from delivery_simulation.fuel.models import MAX_FUEL, GasStation, RouteFuelReport
+from delivery_simulation.fuel.placement import place_gas_stations
+from delivery_simulation.fuel.simulation import travel_with_fuel
 from delivery_simulation.models import (
     DeliveryPoint,
     DeliveryTask,
@@ -30,7 +33,10 @@ from delivery_simulation.vehicle_genetic import (
 __all__ = [
     "DeliveryPoint",
     "DeliveryTask",
+    "GasStation",
+    "MAX_FUEL",
     "RoadNetwork",
+    "RouteFuelReport",
     "SimulationConfig",
     "SimulationResult",
     "TransitNode",
@@ -48,6 +54,8 @@ __all__ = [
     "generate_transit_nodes",
     "initialize_vehicle_genetic",
     "path_distance",
+    "place_gas_stations",
     "run_simulation",
     "run_vehicle_generation",
+    "travel_with_fuel",
 ]
