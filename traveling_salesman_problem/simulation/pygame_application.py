@@ -1,4 +1,4 @@
-"""Aplicação Pygame: loop principal da simulação."""
+"""Aplicação Pygame: loop principal da simulação de entregas."""
 
 import sys
 
@@ -6,23 +6,20 @@ import pygame
 
 from traveling_salesman_problem.config.application_settings import ApplicationSettings
 from traveling_salesman_problem.config.visual_theme import VisualTheme
-from traveling_salesman_problem.genetic_algorithm.fitness import build_delivery_visit_order
 from traveling_salesman_problem.simulation.simulation_state import SimulationState
 from traveling_salesman_problem.visualization.application_layout import (
     draw_application_chrome,
-    draw_delivery_order_panel,
-    draw_map_header,
-    draw_map_legend,
+    draw_delivery_map_header,
+    draw_results_panel,
     draw_section_header,
     draw_sidebar_footer,
+    draw_summary_panel,
 )
-from traveling_salesman_problem.visualization.convergence_chart import draw_convergence_chart
 from traveling_salesman_problem.visualization.map_renderer import (
-    draw_cities,
-    draw_route_direction_arrows,
-    draw_route_paths,
-    draw_route_visit_positions,
-    draw_terrain_features,
+    draw_delivery_points,
+    draw_depot,
+    draw_vehicle_legend,
+    draw_vehicle_routes,
 )
 from traveling_salesman_problem.visualization.sidebar_scroll import SidebarScrollView
 
@@ -30,7 +27,6 @@ from traveling_salesman_problem.visualization.sidebar_scroll import SidebarScrol
 def _draw_scrollable_sidebar(
     simulation: SimulationState,
     sidebar_scroll: SidebarScrollView,
-    visit_order: list[tuple[int, int, int]],
     controls_width: int,
 ) -> None:
     content_surface = sidebar_scroll.content_surface
@@ -38,32 +34,13 @@ def _draw_scrollable_sidebar(
     draw_section_header(
         content_surface,
         VisualTheme.control_margin,
-        simulation.section_algorithm_y,
+        simulation.section_config_y,
         controls_width,
-        "Algoritmo",
+        "Configuração",
     )
-    simulation.mutation_slider.draw(content_surface)
-    simulation.priority_weight_slider.draw(content_surface)
-    simulation.two_opt_toggle.draw(content_surface)
-
-    draw_section_header(
-        content_surface,
-        VisualTheme.control_margin,
-        simulation.section_scenario_y,
-        controls_width,
-        "Cenário",
-    )
-    simulation.scenario_selector.draw(content_surface)
-
-    draw_section_header(
-        content_surface,
-        VisualTheme.control_margin,
-        simulation.section_quantity_y,
-        controls_width,
-        "Terreno no mapa",
-    )
-    simulation.tree_count_slider.draw(content_surface)
-    simulation.lake_count_slider.draw(content_surface)
+    simulation.vehicle_count_slider.draw(content_surface)
+    simulation.delivery_point_count_slider.draw(content_surface)
+    simulation.total_items_slider.draw(content_surface)
 
     draw_section_header(
         content_surface,
@@ -72,33 +49,40 @@ def _draw_scrollable_sidebar(
         controls_width,
         "Ações",
     )
-    simulation.regenerate_positions_button.draw(content_surface)
-    simulation.hospital_preset_button.draw(content_surface)
+    simulation.shuffle_positions_button.draw(content_surface)
+    if simulation.can_simulate():
+        simulation.simulate_button.draw(content_surface)
+    else:
+        muted_button = simulation.simulate_button
+        pygame.draw.rect(
+            content_surface,
+            VisualTheme.neutral,
+            muted_button.rectangle,
+            border_radius=8,
+        )
+        from traveling_salesman_problem.visualization.fonts import get_user_interface_font
+
+        label_surface = get_user_interface_font(13, bold=True).render(
+            muted_button.label,
+            True,
+            VisualTheme.text_inverse,
+        )
+        content_surface.blit(label_surface, label_surface.get_rect(center=muted_button.rectangle.center))
 
     draw_section_header(
         content_surface,
         VisualTheme.control_margin,
-        simulation.section_terrain_y,
+        simulation.section_results_y,
         controls_width,
-        "Penalidades de terreno",
+        "Resultado",
     )
-    simulation.terrain_control_panel.draw(content_surface)
-
-    delivery_section_y = simulation.delivery_order_section_y
-    draw_section_header(
+    draw_results_panel(
         content_surface,
+        simulation.result_lines,
         VisualTheme.control_margin,
-        delivery_section_y,
+        simulation.section_results_y + 26,
         controls_width,
-        "Ordem de entregas",
-    )
-    draw_delivery_order_panel(
-        content_surface,
-        visit_order,
-        VisualTheme.control_margin,
-        delivery_section_y + 26,
-        controls_width,
-        draw_title=False,
+        status_message=simulation.status_message,
     )
 
 
@@ -111,7 +95,7 @@ def run_application(settings=None) -> None:
         (settings.window_width, settings.window_height),
         pygame.RESIZABLE,
     )
-    pygame.display.set_caption("Problema do Caixeiro Viajante · Algoritmo Genético")
+    pygame.display.set_caption("Simulador de Entregas · Roteamento Guloso")
     clock = pygame.time.Clock()
 
     simulation = SimulationState(settings=settings)
@@ -129,10 +113,6 @@ def run_application(settings=None) -> None:
     while is_running:
         for event in pygame.event.get():
             if event.type == pygame.MOUSEWHEEL:
-                if sidebar_scroll.is_mouse_in_viewport(pygame.mouse.get_pos()):
-                    content_position = sidebar_scroll.translate_position(pygame.mouse.get_pos())
-                    if simulation.scenario_selector.handle_wheel(event.y, content_position):
-                        continue
                 if sidebar_scroll.handle_event(event):
                     continue
             elif sidebar_scroll.handle_event(event):
@@ -141,28 +121,21 @@ def run_application(settings=None) -> None:
             if event.type == pygame.QUIT:
                 is_running = False
             elif event.type == pygame.VIDEORESIZE:
-                saved_scenario_id = simulation.active_scenario_id
-                saved_two_opt_active = simulation.two_opt_toggle.is_active
-                saved_mutation = simulation.mutation_slider.value
-                saved_priority_weight = simulation.priority_weight_slider.value
+                saved_vehicle_count = simulation.vehicle_count_slider.integer_value
+                saved_point_count = simulation.delivery_point_count_slider.integer_value
+                saved_total_items = simulation.total_items_slider.selected_value
 
                 screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
-
                 settings = ApplicationSettings(
                     window_width=event.w,
                     window_height=event.h,
                 )
                 simulation = SimulationState(settings=settings)
-                simulation.active_scenario_id = saved_scenario_id
                 simulation.initialize()
-
-                simulation.two_opt_toggle.is_active = saved_two_opt_active
-                simulation.mutation_slider.value = saved_mutation
-                simulation.priority_weight_slider.value = saved_priority_weight
-                if saved_scenario_id != "random":
-                    simulation.apply_scenario(saved_scenario_id)
-                else:
-                    simulation.scenario_selector.set_active("random")
+                simulation.vehicle_count_slider.value = float(saved_vehicle_count)
+                simulation.delivery_point_count_slider.value = float(saved_point_count)
+                simulation.total_items_slider.value = float(saved_total_items)
+                simulation.total_items_slider.snap_to_nearest()
 
                 sidebar_scroll = SidebarScrollView(
                     viewport_top=settings.scroll_viewport_top,
@@ -176,7 +149,7 @@ def run_application(settings=None) -> None:
                     fullscreen = not fullscreen
                     if fullscreen:
                         screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-                    else: 
+                    else:
                         screen = pygame.display.set_mode(
                             (settings.window_width, settings.window_height),
                             pygame.RESIZABLE,
@@ -191,120 +164,50 @@ def run_application(settings=None) -> None:
                 if sidebar_scroll.is_mouse_in_viewport(event.pos):
                     simulation.handle_control_events(sidebar_scroll.translate_event(event))
 
-        simulation.update_terrain_counts_if_changed()
-
-        (
-            generation_number,
-            best_fitness,
-            best_route,
-            second_best_route,
-            best_distance,
-            best_weighted_priority,
-        ) = simulation.run_one_generation()
-
-        visit_order = build_delivery_visit_order(
-            best_route,
-            simulation.city_coordinates,
-            simulation.city_priorities,
-        )
-        sidebar_scroll.set_content_height(
-            simulation.calculate_scrollable_content_height(len(visit_order))
-        )
-
-        vertical_axis_label = (
-            "Fitness (custo total)"
-            if simulation.priority_weight > 0
-            else "Distância (pixels)"
-        )
+        simulation.update_controls()
+        sidebar_scroll.set_content_height(simulation.calculate_scrollable_content_height())
 
         draw_application_chrome(screen, settings.window_width, settings.window_height)
-        draw_map_header(
-            screen,
-            settings.plot_horizontal_offset,
-            settings.window_width,
-            generation_number,
-            best_fitness,
-            best_distance,
-            best_weighted_priority,
-            simulation.priority_weight,
-            simulation.mutation_slider.value * 100,
-            simulation.terrain_control_panel.use_terrain_penalties,
-        )
-        draw_map_legend(
-            screen,
-            settings.window_width - 190,
-            VisualTheme.map_header_height + 12,
-        )
 
-        draw_convergence_chart(
+        draw_summary_panel(
             screen,
-            list(range(len(simulation.best_fitness_history))),
-            simulation.best_fitness_history,
-            vertical_axis_label=vertical_axis_label,
+            VisualTheme.control_margin,
+            0,
+            settings.plot_horizontal_offset - 2 * VisualTheme.control_margin,
+            settings.summary_panel_height,
+            simulation.total_distance(),
+            simulation.total_trips(),
         )
 
         controls_width = settings.plot_horizontal_offset - 2 * VisualTheme.control_margin
-        _draw_scrollable_sidebar(simulation, sidebar_scroll, visit_order, controls_width)
+        _draw_scrollable_sidebar(simulation, sidebar_scroll, controls_width)
         sidebar_scroll.blit_to_screen(screen)
         draw_sidebar_footer(screen, settings.sidebar_footer_y)
 
-        draw_map_header(
+        draw_delivery_map_header(
             screen,
             settings.plot_horizontal_offset,
             settings.window_width,
-            generation_number,
-            best_fitness,
-            best_distance,
-            best_weighted_priority,
-            simulation.priority_weight,
-            simulation.mutation_slider.value * 100,
-            simulation.terrain_control_panel.use_terrain_penalties,
-        )
-        draw_map_legend(
-            screen,
-            settings.window_width - 190,
-            VisualTheme.map_header_height + 12,
+            simulation.total_distance(),
         )
 
-        draw_terrain_features(screen, simulation.terrain_features)
-        draw_cities(
-            screen,
-            simulation.city_coordinates,
-            simulation.city_priorities,
-            settings.city_node_radius,
-        )
-        draw_route_paths(
-            screen,
-            best_route,
-            VisualTheme.route_best,
-            line_width=3,
-            draw_glow=True,
-        )
-        draw_route_direction_arrows(
-            screen,
-            best_route,
-            simulation.city_coordinates,
-        )
-        draw_route_visit_positions(
-            screen,
-            best_route,
-            simulation.city_coordinates,
-            settings.city_node_radius,
-        )
-        draw_route_paths(
-            screen,
-            second_best_route,
-            VisualTheme.route_second_best,
-            line_width=1,
-        )
-
-        print(
-            f"Geração {generation_number}: "
-            f"fitness={round(best_fitness, 2)}  "
-            f"dist={round(best_distance, 2)}  "
-            f"prior={round(best_weighted_priority, 2)}  "
-            f"peso={round(simulation.priority_weight)}"
-        )
+        if simulation.depot is not None:
+            draw_depot(screen, simulation.depot, settings.depot_half_size)
+        if simulation.delivery_points:
+            draw_delivery_points(screen, simulation.delivery_points, settings.delivery_point_radius)
+        if simulation.simulation_result is not None:
+            draw_vehicle_routes(
+                screen,
+                simulation.simulation_result,
+                VisualTheme.vehicle_route_colors,
+            )
+            draw_vehicle_legend(
+                screen,
+                simulation.vehicle_count_slider.integer_value,
+                VisualTheme.vehicle_route_colors,
+                settings.window_width - 160,
+                settings.window_height - 120,
+            )
 
         pygame.display.flip()
         clock.tick(settings.frames_per_second)

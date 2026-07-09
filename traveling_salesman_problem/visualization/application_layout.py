@@ -84,6 +84,104 @@ def draw_card(screen: pygame.Surface, rectangle: pygame.Rect) -> None:
     )
 
 
+def draw_summary_panel(
+    screen: pygame.Surface,
+    position_x: int,
+    position_y: int,
+    width: int,
+    height: int,
+    total_distance: float | None,
+    total_trips: int | None,
+) -> None:
+    draw_card(screen, pygame.Rect(position_x, position_y, width, height))
+    title_font = get_user_interface_font(13, bold=True)
+    body_font = get_monospace_font(12)
+
+    screen.blit(title_font.render("Resumo", True, VisualTheme.text_primary), (position_x + 12, position_y + 12))
+
+    distance_text = f"{total_distance:.0f} px" if total_distance is not None else "---"
+    trips_text = str(total_trips) if total_trips is not None else "---"
+
+    screen.blit(
+        body_font.render(f"Distância total: {distance_text}", True, VisualTheme.text_primary),
+        (position_x + 12, position_y + 44),
+    )
+    screen.blit(
+        body_font.render(f"Viagens: {trips_text}", True, VisualTheme.text_primary),
+        (position_x + 12, position_y + 64),
+    )
+
+
+def draw_delivery_map_header(
+    screen: pygame.Surface,
+    map_start_x: int,
+    window_width: int,
+    total_distance: float | None,
+) -> None:
+    header_rectangle = pygame.Rect(
+        map_start_x,
+        0,
+        window_width - map_start_x,
+        VisualTheme.map_header_height,
+    )
+    pygame.draw.rect(screen, VisualTheme.background_map_header, header_rectangle)
+    pygame.draw.line(
+        screen,
+        VisualTheme.divider,
+        (map_start_x, VisualTheme.map_header_height - 1),
+        (window_width, VisualTheme.map_header_height - 1),
+        1,
+    )
+
+    title_font = get_user_interface_font(15, bold=True)
+    muted_font = get_user_interface_font(11)
+    statistics_font = get_monospace_font(11)
+
+    screen.blit(
+        title_font.render("Simulador de Entregas", True, VisualTheme.text_primary),
+        (map_start_x + 16, 10),
+    )
+
+    subtitle = "Roteamento guloso · Configure e simule" if total_distance is None else "Roteamento guloso"
+    screen.blit(
+        muted_font.render(subtitle, True, VisualTheme.text_muted),
+        (map_start_x + 16, 28),
+    )
+
+    if total_distance is not None:
+        statistics_text = f"Total {total_distance:.0f} px"
+        statistics_surface = statistics_font.render(statistics_text, True, VisualTheme.text_primary)
+        statistics_rectangle = statistics_surface.get_rect(
+            midright=(window_width - 16, VisualTheme.map_header_height // 2 + 2),
+        )
+        screen.blit(statistics_surface, statistics_rectangle)
+
+
+def draw_results_panel(
+    screen: pygame.Surface,
+    result_lines: List[str],
+    position_x: int,
+    position_y: int,
+    width: int,
+    status_message: str | None = None,
+) -> int:
+    row_font = get_monospace_font(10)
+    current_y = position_y
+
+    if status_message:
+        screen.blit(
+            row_font.render(status_message, True, VisualTheme.accent),
+            (position_x, current_y),
+        )
+        current_y += 16
+
+    for line in result_lines:
+        screen.blit(row_font.render(line, True, VisualTheme.text_primary), (position_x, current_y))
+        current_y += 14
+
+    return current_y + 4
+
+
 def draw_map_header(
     screen: pygame.Surface,
     map_start_x: int,
@@ -244,8 +342,8 @@ def draw_sidebar_footer(
     position_y: int,
 ) -> None:
     hint_font = get_user_interface_font(10)
-    first_line = "Q · Sair          Esc · Fechar"
-    second_line = "O · Terreno       P · Hospitalar"
+    first_line = "Q · Sair          Esc · Fechar          F · Tela cheia"
+    second_line = "Sortear posições · Simular rotas"
     screen.blit(
         hint_font.render(first_line, True, VisualTheme.text_muted),
         (VisualTheme.control_margin, position_y),

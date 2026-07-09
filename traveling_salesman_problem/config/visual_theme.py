@@ -45,6 +45,14 @@ class VisualTheme:
     route_best_glow = (191, 219, 254)
     route_second_best = (148, 163, 184)
 
+    vehicle_route_colors = (
+        route_best,
+        (234, 88, 12),
+        success,
+    )
+    depot_fill = (30, 64, 175)
+    depot_stroke = (255, 255, 255)
+
     obstacle_fill = (254, 202, 202, 140)
     obstacle_border = (239, 68, 68)
     obstacle_disabled = (226, 232, 240)

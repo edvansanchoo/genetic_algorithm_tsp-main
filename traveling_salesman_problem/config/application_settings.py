@@ -1,4 +1,4 @@
-"""Parâmetros da janela, do mapa e do algoritmo genético."""
+"""Parâmetros da janela, do mapa e do simulador de entregas."""
 
 from dataclasses import dataclass
 
@@ -11,22 +11,17 @@ class ApplicationSettings:
     window_height: int = 940
     frames_per_second: int = 30
 
-    number_of_cities: int = 15
-    population_size: int = 100
-    initial_mutation_probability: float = 0.01
-    initial_priority_weight: float = 0.0
-
-    initial_tree_count: int = 3
-    initial_lake_count: int = 2
-    maximum_terrain_features_per_type: int = 8
+    initial_vehicle_count: int = 1
+    initial_delivery_point_count: int = 2
+    initial_total_items: int = 6
 
     map_margin: int = 20
-    city_node_radius: int = 9
+    delivery_point_radius: int = 9
+    depot_half_size: int = 7
 
-    mutation_slider_height: int = 58
     count_slider_height: int = 48
-    regenerate_button_height: int = 36
-    scenario_selector_viewport_height: int = 140
+    action_button_height: int = 36
+    summary_panel_height: int = 400
 
     @property
     def plot_horizontal_offset(self) -> int:
