@@ -49,6 +49,25 @@ class VisualTheme:
     obstacle_border = (239, 68, 68)
     obstacle_disabled = (226, 232, 240)
 
+    mesh_edge = (203, 213, 225)
+    transit_fill = (148, 163, 184)
+    transit_stroke = (100, 116, 139)
+    blocked_fill = (239, 68, 68)
+    blocked_x = (127, 29, 29)
+
+    depot_fill = (15, 23, 42)
+    depot_stroke = (255, 255, 255)
+    depot_marker_size: int = 18
+    route_arrow_fill = (255, 255, 255)
+    route_arrow_outline = (15, 23, 42)
+    vehicle_route_colors = [
+        (37, 99, 235),
+        (220, 38, 38),
+        (5, 150, 105),
+        (217, 119, 6),
+        (124, 58, 237),
+    ]
+
     tree_trunk = (101, 67, 33)
     tree_trunk_dark = (78, 52, 26)
     tree_foliage = (34, 139, 34)

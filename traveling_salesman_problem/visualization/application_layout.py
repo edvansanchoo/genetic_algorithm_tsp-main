@@ -94,7 +94,7 @@ def draw_map_header(
     weighted_priority_penalty: float,
     priority_weight: float,
     mutation_percentage: float,
-    obstacle_penalties_active: bool,
+    obstacle_penalties_active: bool = False,
 ) -> None:
     header_rectangle = pygame.Rect(
         map_start_x,
@@ -130,8 +130,7 @@ def draw_map_header(
         mode_label = "Críticas primeiro"
         mode_color = VisualTheme.accent
 
-    if obstacle_penalties_active:
-        mode_label = f"{mode_label} · Evita terreno"
+    mode_label = f"{mode_label} · VRP"
 
     screen.blit(
         muted_font.render(mode_label, True, mode_color),
@@ -197,21 +196,40 @@ def draw_delivery_order_panel(
     return current_y + 4
 
 
+def draw_route_text_panel(
+    screen: pygame.Surface,
+    lines: List[str],
+    position_x: int,
+    position_y: int,
+    width: int,
+) -> int:
+    row_font = get_monospace_font(10)
+    bold_font = get_monospace_font(10, bold=True)
+    current_y = position_y
+    for line in lines:
+        is_header = line.startswith("Veículo")
+        font = bold_font if is_header else row_font
+        color = VisualTheme.text_primary if is_header else VisualTheme.text_muted
+        display = line if len(line) <= 52 else f"{line[:49]}…"
+        screen.blit(font.render(display, True, color), (position_x, current_y))
+        current_y += 16
+    return current_y + 4
+
+
 def draw_map_legend(
     screen: pygame.Surface,
     position_x: int,
     position_y: int,
 ) -> None:
     legend_items = [
-        (VisualTheme.route_best, "Melhor rota"),
-        (VisualTheme.route_second_best, "Segunda melhor"),
-        (VisualTheme.route_best, "→ Direção da rota"),
-        (VisualTheme.text_primary, "Posição na rota (1–N)"),
+        (VisualTheme.depot_fill, "Depósito"),
+        (VisualTheme.route_best, "Rota veículo"),
+        (VisualTheme.transit_fill, "Nó de trânsito"),
+        (VisualTheme.blocked_fill, "Nó bloqueado"),
+        (VisualTheme.mesh_edge, "Aresta da malha"),
         (priority_to_color(1), "Baixa prioridade (1)"),
         (priority_to_color(5), "Média prioridade (5)"),
         (priority_to_color(10), "Alta prioridade (10)"),
-        (VisualTheme.tree_foliage, "Árvore"),
-        (VisualTheme.lake_water, "Lago"),
     ]
     padding = 10
     row_height = 18
@@ -245,7 +263,7 @@ def draw_sidebar_footer(
 ) -> None:
     hint_font = get_user_interface_font(10)
     first_line = "Q · Sair          Esc · Fechar"
-    second_line = "O · Terreno       P · Hospitalar"
+    second_line = "Filtro cicla veículos · Malha on/off"
     screen.blit(
         hint_font.render(first_line, True, VisualTheme.text_muted),
         (VisualTheme.control_margin, position_y),

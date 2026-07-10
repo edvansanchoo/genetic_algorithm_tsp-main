@@ -1,5 +1,7 @@
 """Gráfico de convergência do algoritmo genético."""
 
+from typing import Dict, List, Optional, Sequence, Tuple
+
 import matplotlib
 import matplotlib.pyplot as plt
 import pygame
@@ -14,14 +16,27 @@ matplotlib.use("Agg")
 def draw_convergence_chart(
     screen: pygame.Surface,
     generation_numbers: list,
-    fitness_values: list,
+    fitness_values: list = None,
     horizontal_axis_label: str = "Geração",
     vertical_axis_label: str = "Custo da rota",
+    series: Optional[Dict[int, Sequence[float]]] = None,
+    series_colors: Optional[List[Tuple[int, int, int]]] = None,
 ) -> None:
     figure, axes = plt.subplots(figsize=(4.4, 4), dpi=100)
     axes.set_facecolor("#f8fafc")
     figure.patch.set_facecolor("#f1f4f9")
-    axes.plot(generation_numbers, fitness_values, color="#2563eb", linewidth=2)
+
+    if series:
+        colors = series_colors or VisualTheme.vehicle_route_colors
+        for index, (vehicle_id, values) in enumerate(sorted(series.items())):
+            color = colors[index % len(colors)]
+            hex_color = "#{:02x}{:02x}{:02x}".format(*color)
+            xs = list(range(1, len(values) + 1))
+            axes.plot(xs, values, color=hex_color, linewidth=2, label=f"V{vehicle_id + 1}")
+        axes.legend(fontsize=7, loc="upper right")
+    else:
+        axes.plot(generation_numbers, fitness_values or [], color="#2563eb", linewidth=2)
+
     axes.set_ylabel(vertical_axis_label, fontsize=9, color="#475569")
     axes.set_xlabel(horizontal_axis_label, fontsize=9, color="#475569")
     axes.tick_params(labelsize=8, colors="#64748b")
