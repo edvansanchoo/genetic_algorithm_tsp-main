@@ -84,7 +84,6 @@ class DeliveryMeshTests(unittest.TestCase):
             map_bounds=(-20, -20, 120, 120),
             transit_count=4,
             blocked_count=1,
-            connection_radius=80.0,
             rng_seed=1,
         )
         path = delivery_segment_path(mesh, cities[0], cities[1])
@@ -154,6 +153,38 @@ class DeliveryMeshTests(unittest.TestCase):
         self.assertIn((50.0, 40.0), polyline)
         self.assertGreaterEqual(len(polyline), 3)
 
+    def test_generated_mesh_is_complete_graph(self):
+        cities = [(0.0, 0.0), (100.0, 0.0), (50.0, 80.0)]
+        mesh = build_delivery_mesh(
+            cities,
+            map_bounds=(-20, -20, 120, 120),
+            transit_count=4,
+            blocked_count=1,
+            rng_seed=1,
+        )
+        node_count = len(mesh.network.nodes)
+        expected_edges = node_count * (node_count - 1) // 2
+        self.assertEqual(len(mesh.network.edges), expected_edges)
+        for transit_id in mesh.transit_ids:
+            degree = sum(
+                1
+                for node_a, node_b in mesh.network.edges
+                if transit_id in (node_a, node_b)
+            )
+            self.assertGreaterEqual(degree, 1)
+
+    def test_blocked_not_in_network_nodes(self):
+        cities = [(0.0, 0.0), (100.0, 0.0)]
+        mesh = build_delivery_mesh(
+            cities,
+            map_bounds=(-20, -20, 120, 120),
+            transit_count=2,
+            blocked_count=2,
+            rng_seed=3,
+        )
+        for blocked_id in mesh.blocked_ids:
+            self.assertNotIn(blocked_id, mesh.network.nodes)
+
 
 class VrpMeshTests(unittest.TestCase):
     def test_build_vrp_mesh_includes_depot(self):
@@ -171,12 +202,16 @@ class VrpMeshTests(unittest.TestCase):
             map_bounds=(-10, -10, 60, 60),
             transit_count=3,
             blocked_count=1,
-            connection_radius=45.0,
             rng_seed=11,
         )
         self.assertIn(DEPOT_ID, mesh.network.nodes)
         self.assertIn("A", mesh.network.nodes)
         self.assertIn("B", mesh.network.nodes)
+        node_count = len(mesh.network.nodes)
+        self.assertEqual(
+            len(mesh.network.edges),
+            node_count * (node_count - 1) // 2,
+        )
         path = delivery_segment_path(mesh, depot, deliveries[0].coordinate)
         self.assertTrue(path)
         self.assertEqual(path[0], DEPOT_ID)

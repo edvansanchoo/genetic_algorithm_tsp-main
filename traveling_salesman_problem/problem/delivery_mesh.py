@@ -10,7 +10,7 @@ from traveling_salesman_problem.problem.road_network import (
     Coordinate,
     EdgeKey,
     RoadNetwork,
-    build_connected_network,
+    build_complete_network,
     find_path,
     find_path_weighted,
     generate_transit_nodes,
@@ -41,7 +41,6 @@ def build_delivery_mesh(
     map_bounds: MapBounds,
     transit_count: int,
     blocked_count: int,
-    connection_radius: float,
     rng: Optional[random.Random] = None,
     rng_seed: Optional[int] = None,
     max_rebuild_attempts: int = 40,
@@ -89,12 +88,7 @@ def build_delivery_mesh(
             blocked_ids.add(node_id)
             blocked_coordinates[node_id] = coordinate
 
-        network = build_connected_network(
-            nodes,
-            connection_radius,
-            root_id=delivery_ids[0],
-            required_ids=delivery_ids,
-        )
+        network = build_complete_network(nodes)
         mesh = DeliveryMesh(
             network=network,
             delivery_ids=delivery_ids,
@@ -117,7 +111,6 @@ def build_vrp_mesh(
     map_bounds: MapBounds,
     transit_count: int,
     blocked_count: int,
-    connection_radius: float,
     rng: Optional[random.Random] = None,
     rng_seed: Optional[int] = None,
     max_rebuild_attempts: int = 40,
@@ -169,12 +162,7 @@ def build_vrp_mesh(
             blocked_ids.add(node_id)
             blocked_coordinates[node_id] = coordinate
 
-        network = build_connected_network(
-            nodes,
-            connection_radius,
-            root_id=DEPOT_ID,
-            required_ids=[DEPOT_ID, *delivery_ids],
-        )
+        network = build_complete_network(nodes)
         mesh = DeliveryMesh(
             network=network,
             delivery_ids=delivery_ids,
