@@ -204,7 +204,6 @@ class SimulationState:
             self.map_bounds(),
             transit_count=transit_count,
             blocked_count=blocked_count,
-            connection_radius=settings.connection_radius,
         )
         self.assignment = assign_deliveries_greedy(
             self.deliveries,

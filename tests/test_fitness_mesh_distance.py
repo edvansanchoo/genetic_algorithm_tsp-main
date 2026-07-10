@@ -21,7 +21,6 @@ class MeshFitnessTests(unittest.TestCase):
             (-10, -10, 60, 60),
             transit_count=4,
             blocked_count=1,
-            connection_radius=35.0,
             rng_seed=2,
         )
         mesh_dist = calculate_route_distance(list(cities), mesh=mesh)
@@ -35,7 +34,6 @@ class MeshFitnessTests(unittest.TestCase):
             (-5, -5, 15, 15),
             transit_count=2,
             blocked_count=1,
-            connection_radius=20.0,
             rng_seed=3,
         )
         route = list(cities)
