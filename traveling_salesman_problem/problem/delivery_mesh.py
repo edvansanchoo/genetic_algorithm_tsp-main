@@ -235,6 +235,7 @@ def delivery_segment_path(
     destination: Coordinate,
     used_edges: Optional[Set[EdgeKey]] = None,
     reuse_penalty: float = 1.0,
+    forbidden_edges: Optional[Set[EdgeKey]] = None,
 ) -> List[str]:
     origin_id = _id_for_coordinate(mesh, origin)
     destination_id = _id_for_coordinate(mesh, destination)
@@ -245,6 +246,7 @@ def delivery_segment_path(
         blocked=set(mesh.blocked_ids),
         used_edges=used_edges,
         reuse_penalty=reuse_penalty,
+        forbidden_edges=forbidden_edges,
     )
 
 
@@ -254,6 +256,7 @@ def delivery_segment_distance(
     destination: Coordinate,
     used_edges: Optional[Set[EdgeKey]] = None,
     reuse_penalty: float = 1.0,
+    forbidden_edges: Optional[Set[EdgeKey]] = None,
 ) -> float:
     path = delivery_segment_path(
         mesh,
@@ -261,6 +264,7 @@ def delivery_segment_distance(
         destination,
         used_edges=used_edges,
         reuse_penalty=reuse_penalty,
+        forbidden_edges=forbidden_edges,
     )
     if not path:
         return float("inf")
