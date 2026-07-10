@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 from traveling_salesman_problem.problem.vrp_models import (
     Coordinate,
@@ -14,6 +14,10 @@ from traveling_salesman_problem.problem.vrp_models import (
 
 def _euclidean(point_a: Coordinate, point_b: Coordinate) -> float:
     return math.hypot(point_a[0] - point_b[0], point_a[1] - point_b[1])
+
+
+def total_delivery_demand(deliveries: Sequence[DeliveryPoint]) -> int:
+    return sum(point.demand for point in deliveries)
 
 
 def split_into_tokens(point: DeliveryPoint, capacity: int) -> List[DeliveryToken]:
