@@ -20,6 +20,7 @@ from traveling_salesman_problem.problem.priority_presets import apply_hospital_p
 from traveling_salesman_problem.problem.vrp_assignment import (
     assign_deliveries_greedy,
     split_into_tokens,
+    total_delivery_demand,
 )
 from traveling_salesman_problem.problem.vrp_models import Coordinate, DeliveryPoint
 from traveling_salesman_problem.simulation.vehicle_genetic import (
@@ -232,7 +233,18 @@ class SimulationState:
         self.last_capacity = capacity
         self.last_transit_count = transit_count
         self.last_blocked_count = blocked_count
+        self._sync_capacity_slider_bounds()
         self._sync_focus_after_rebuild()
+
+    def _sync_capacity_slider_bounds(self) -> None:
+        if self.capacity_slider is None:
+            return
+        settings = self.settings
+        total = total_delivery_demand(self.deliveries)
+        maximum = max(settings.minimum_capacity, total)
+        self.capacity_slider.maximum_value = float(maximum)
+        if self.capacity_slider.integer_value > maximum:
+            self.capacity_slider.value = float(maximum)
 
     def shuffle_all(self) -> None:
         self.depot = None
@@ -340,7 +352,7 @@ class SimulationState:
             height=settings.count_slider_height,
             value=settings.initial_capacity,
             minimum_value=settings.minimum_capacity,
-            maximum_value=settings.maximum_capacity,
+            maximum_value=settings.initial_capacity,
             label="Capacidade",
         )
         self.transit_count_slider = IntegerSlider(
