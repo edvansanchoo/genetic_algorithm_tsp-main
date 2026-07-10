@@ -106,7 +106,11 @@ def edge_cost(
     node_b: str,
     used_edges: Set[EdgeKey],
     reuse_penalty: float,
+    forbidden_edges: Optional[Set[EdgeKey]] = None,
 ) -> float:
+    forbidden_edges = forbidden_edges or set()
+    if canonical_edge(node_a, node_b) in forbidden_edges:
+        return float("inf")
     base = euclidean(network.nodes[node_a], network.nodes[node_b])
     if canonical_edge(node_a, node_b) in used_edges:
         return base * reuse_penalty
@@ -140,10 +144,12 @@ def find_path_weighted(
     blocked: Optional[Set[str]] = None,
     used_edges: Optional[Set[EdgeKey]] = None,
     reuse_penalty: float = 1.0,
+    forbidden_edges: Optional[Set[EdgeKey]] = None,
 ) -> List[str]:
-    """Dijkstra; arestas em used_edges custam euclidiana × reuse_penalty."""
+    """Dijkstra; forbidden_edges are impassable; used_edges cost × reuse_penalty."""
     blocked = blocked or set()
     used_edges = used_edges or set()
+    forbidden_edges = forbidden_edges or set()
     if origin not in network.nodes or destination not in network.nodes:
         return []
     if origin in blocked or destination in blocked:
@@ -166,7 +172,12 @@ def find_path_weighted(
             if neighbor in blocked:
                 continue
             new_cost = cost + edge_cost(
-                network, node, neighbor, used_edges, reuse_penalty
+                network,
+                node,
+                neighbor,
+                used_edges,
+                reuse_penalty,
+                forbidden_edges,
             )
             if new_cost < dist.get(neighbor, float("inf")):
                 dist[neighbor] = new_cost
