@@ -8,6 +8,7 @@ from traveling_salesman_problem.config.application_settings import ApplicationSe
 from traveling_salesman_problem.config.visual_theme import VisualTheme
 from traveling_salesman_problem.simulation.evolution_throttle import compute_generations_for_frame
 from traveling_salesman_problem.simulation.simulation_state import SimulationState
+from delivery_simulation.fuel.models import MAX_FUEL
 from traveling_salesman_problem.visualization.application_layout import (
     draw_application_chrome,
     draw_delivery_map_header,
@@ -266,7 +267,7 @@ def run_application(settings=None) -> None:
             if not report.is_feasible:
                 fuel_label = "Comb inválida"
             else:
-                fuel_label = f"Comb {report.final_fuel:.0f}/150"
+                fuel_label = f"Comb {report.final_fuel:.0f}/{int(MAX_FUEL)}"
         draw_delivery_map_header(
             screen,
             settings.plot_horizontal_offset,

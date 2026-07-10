@@ -1,6 +1,6 @@
 import unittest
 
-from delivery_simulation.fuel.models import MAX_FUEL
+from delivery_simulation.fuel.models import INITIAL_FUEL, MAX_FUEL
 from delivery_simulation.models import DEPOT_ID, DeliveryTask
 from delivery_simulation.road_network import build_road_network
 from delivery_simulation.route_evaluator import evaluate_permutation
@@ -23,7 +23,7 @@ class RouteEvaluatorTests(unittest.TestCase):
         self.assertTrue(report.is_feasible)
 
     def test_capacity_splits_into_two_trips(self):
-        nodes = {DEPOT_ID: (0.0, 0.0), "A": (10.0, 0.0)}
+        nodes = {DEPOT_ID: (0.0, 0.0), "A": (5.0, 0.0)}
         network = build_road_network(nodes, radius=100.0)
         tasks = [DeliveryTask("A", 10), DeliveryTask("A", 4)]
         distance, trips, report = evaluate_permutation(tasks, list(tasks), network)
@@ -46,6 +46,10 @@ class RouteEvaluatorTests(unittest.TestCase):
 
 
 class RouteEvaluatorFuelTests(unittest.TestCase):
+    def test_starts_with_initial_fuel(self):
+        self.assertEqual(INITIAL_FUEL, 30.0)
+        self.assertEqual(MAX_FUEL, 30.0)
+
     def test_insufficient_fuel_without_station_is_infinity(self):
         nodes = {DEPOT_ID: (0.0, 0.0), "A": (200.0, 0.0)}
         network = build_road_network(nodes, radius=250.0)
@@ -55,18 +59,18 @@ class RouteEvaluatorFuelTests(unittest.TestCase):
         self.assertFalse(report.is_feasible)
 
     def test_station_detour_makes_long_leg_feasible(self):
+        # Tank 30: outbound DEPOT→A=20 uses direct edge; return needs F1 off-path
         nodes = {
             DEPOT_ID: (0.0, 0.0),
-            "F1": (80.0, 0.0),
-            "A": (160.0, 0.0),
-            "F2": (140.0, 40.0),
+            "A": (20.0, 0.0),
+            "F1": (15.0, 5.0),
         }
-        network = build_road_network(nodes, radius=150.0)
+        network = build_road_network(nodes, radius=25.0)
         tasks = [DeliveryTask("A", 4)]
         distance, trips, report = evaluate_permutation(tasks, tasks, network)
         self.assertTrue(report.is_feasible)
         self.assertNotEqual(distance, float("inf"))
         stop_ids = [stop.point_id for stop in trips[0].stops]
-        self.assertTrue("F1" in stop_ids or "F2" in stop_ids)
+        self.assertIn("F1", stop_ids)
         self.assertTrue(any(stop.is_fuel_station for stop in trips[0].stops))
-        self.assertLess(report.final_fuel, MAX_FUEL)
+        self.assertLessEqual(report.final_fuel, MAX_FUEL)

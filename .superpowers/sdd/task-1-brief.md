@@ -1,141 +1,137 @@
-### Task 1: Domain models and distance
+﻿### Task 1: Fuel models and constants
 
 **Files:**
-- Create: `delivery_simulation/__init__.py`
-- Create: `delivery_simulation/models.py`
-- Create: `delivery_simulation/distance.py`
-- Create: `tests/test_distance.py`
+- Create: `delivery_simulation/fuel/__init__.py`
+- Create: `delivery_simulation/fuel/models.py`
+- Test: `tests/test_fuel_simulation.py` (model smoke only in this task)
 
 **Interfaces:**
-- Consumes: nothing
+- Consumes: `Coordinate` from `delivery_simulation.models`
 - Produces:
-  - `Coordinate = Tuple[float, float]`
-  - `MAX_CAPACITY = 10`
-  - `VALID_TOTAL_ITEMS = (2, 4, 6, 8, 10, 12, 14)`
-  - `DEPOT_ID = "DEPOT"`
-  - Dataclasses: `DeliveryPoint`, `Stop`, `Trip`, `Vehicle`, `SimulationConfig`, `SimulationResult`
-  - `euclidean(a: Coordinate, b: Coordinate) -> float`
+  - `MAX_FUEL: float = 150.0`
+  - `MAX_STATION_DISTANCE_FROM_NETWORK: float = 100.0`
+  - `FUEL_STATION_ID_PREFIX: str = "F"`
+  - `MIN_STATION_SEPARATION: float = 30.0`
+  - `@dataclass(frozen=True) class GasStation: id: str; coordinate: Coordinate`
+  - `@dataclass class FuelLeg: leg_index: int; from_node_id: str; to_node_id: str; distance: float; fuel_before: float; fuel_consumed: float; fuel_after: float`
+  - `@dataclass class FuelStopEvent: station_id: str; fuel_on_arrival: float; fuel_on_departure: float`
+  - `@dataclass class RouteFuelReport: legs: List[FuelLeg]; stops: List[FuelStopEvent]; final_fuel: float; is_feasible: bool; expanded_node_ids: List[str]; total_distance: float`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write failing smoke test**
 
-Create `tests/test_distance.py`:
+Create `tests/test_fuel_simulation.py`:
 
 ```python
-import math
 import unittest
 
-from delivery_simulation.distance import euclidean
+from delivery_simulation.fuel.models import MAX_FUEL, GasStation, RouteFuelReport
 
 
-class EuclideanDistanceTests(unittest.TestCase):
-    def test_horizontal_segment(self):
-        self.assertAlmostEqual(euclidean((0, 0), (3, 0)), 3.0)
+class FuelModelTests(unittest.TestCase):
+    def test_max_fuel_is_150(self):
+        self.assertEqual(MAX_FUEL, 150.0)
 
-    def test_diagonal_3_4_5(self):
-        self.assertAlmostEqual(euclidean((0, 0), (3, 4)), 5.0)
-
-    def test_same_point_is_zero(self):
-        self.assertAlmostEqual(euclidean((100, 200), (100, 200)), 0.0)
+    def test_gas_station_frozen(self):
+        station = GasStation("F1", (10.0, 20.0))
+        self.assertEqual(station.id, "F1")
+        with self.assertRaises(Exception):
+            station.id = "F2"  # type: ignore[misc]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run test â€” expect FAIL (import error)**
 
-Run: `python -m pytest tests/test_distance.py -v`  
-Expected: FAIL — `ModuleNotFoundError: delivery_simulation`
+Run: `python -m unittest tests.test_fuel_simulation.FuelModelTests -v`  
+Expected: FAIL â€” `No module named 'delivery_simulation.fuel'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 3: Implement models**
 
-Create `delivery_simulation/__init__.py`:
-
-```python
-"""Simulador guloso de distribuição de entregas."""
-```
-
-Create `delivery_simulation/models.py`:
+Create `delivery_simulation/fuel/models.py`:
 
 ```python
-"""Modelos de domínio do simulador de entregas."""
+"""Tipos e constantes de combustÃ­vel / postos."""
 
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
 Coordinate = Tuple[float, float]
 
-MAX_CAPACITY = 10
-VALID_TOTAL_ITEMS = (2, 4, 6, 8, 10, 12, 14)
-DEPOT_ID = "DEPOT"
-POINT_IDS = ("A", "B", "C")
+MAX_FUEL = 150.0
+MAX_STATION_DISTANCE_FROM_NETWORK = 100.0
+FUEL_STATION_ID_PREFIX = "F"
+MIN_STATION_SEPARATION = 30.0
 
 
-@dataclass
-class DeliveryPoint:
+@dataclass(frozen=True)
+class GasStation:
     id: str
     coordinate: Coordinate
-    total_items: int
-    remaining_items: int
 
 
 @dataclass
-class Stop:
-    point_id: str
-    items_delivered: int
-
-
-@dataclass
-class Trip:
-    stops: List[Stop]
+class FuelLeg:
+    leg_index: int
+    from_node_id: str
+    to_node_id: str
     distance: float
+    fuel_before: float
+    fuel_consumed: float
+    fuel_after: float
 
 
 @dataclass
-class Vehicle:
-    id: int
-    current_position: Coordinate
-    current_load: int
-    trips: List[Trip] = field(default_factory=list)
-    assigned_points: List[str] = field(default_factory=list)
+class FuelStopEvent:
+    station_id: str
+    fuel_on_arrival: float
+    fuel_on_departure: float
 
 
 @dataclass
-class SimulationConfig:
-    vehicle_count: int
-    delivery_point_count: int
-    total_items: int
-
-
-@dataclass
-class SimulationResult:
-    config: SimulationConfig
-    depot: Coordinate
-    delivery_points: List[DeliveryPoint]
-    vehicles: List[Vehicle]
-    total_system_distance: float
+class RouteFuelReport:
+    legs: List[FuelLeg] = field(default_factory=list)
+    stops: List[FuelStopEvent] = field(default_factory=list)
+    final_fuel: float = MAX_FUEL
+    is_feasible: bool = True
+    expanded_node_ids: List[str] = field(default_factory=list)
+    total_distance: float = 0.0
 ```
 
-Create `delivery_simulation/distance.py`:
+Create `delivery_simulation/fuel/__init__.py`:
 
 ```python
-"""Cálculo de distância euclidiana."""
+from delivery_simulation.fuel.models import (
+    FUEL_STATION_ID_PREFIX,
+    MAX_FUEL,
+    MAX_STATION_DISTANCE_FROM_NETWORK,
+    MIN_STATION_SEPARATION,
+    FuelLeg,
+    FuelStopEvent,
+    GasStation,
+    RouteFuelReport,
+)
 
-import math
-
-from delivery_simulation.models import Coordinate
-
-
-def euclidean(point_a: Coordinate, point_b: Coordinate) -> float:
-    delta_x = point_b[0] - point_a[0]
-    delta_y = point_b[1] - point_a[1]
-    return math.hypot(delta_x, delta_y)
+__all__ = [
+    "FUEL_STATION_ID_PREFIX",
+    "MAX_FUEL",
+    "MAX_STATION_DISTANCE_FROM_NETWORK",
+    "MIN_STATION_SEPARATION",
+    "FuelLeg",
+    "FuelStopEvent",
+    "GasStation",
+    "RouteFuelReport",
+]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run test â€” expect PASS**
 
-Run: `python -m pytest tests/test_distance.py -v`  
-Expected: PASS (3 tests)
+Run: `python -m unittest tests.test_fuel_simulation.FuelModelTests -v`  
+Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add delivery_simulation/ tests/test_distance.py
-git commit -m "feat: add delivery simulation domain models and distance"
+git add delivery_simulation/fuel/__init__.py delivery_simulation/fuel/models.py tests/test_fuel_simulation.py
+git commit -m "feat: add fuel domain models and constants"
 ```
+
+---
+

@@ -1,14 +1,14 @@
-# SDD Progress — delivery-genetic-optimization
+﻿# SDD Progress — delivery-fuel-stations
 
 Branch: feat/greedy-delivery-simulation
-Plan: docs/superpowers/plans/2026-07-08-delivery-genetic-optimization.md
+Plan: docs/superpowers/plans/2026-07-09-delivery-fuel-stations.md
+Workspace: in-place (already on feature branch)
 
-Task 1: complete (DeliveryTask model)
-Task 2: complete (extract_vehicle_assignments)
-Task 3: complete (route_evaluator)
-Task 4: complete (vehicle_genetic)
-Task 5: complete (multi-series convergence chart)
-Task 6: complete (application_settings)
-Task 7: complete (simulation_state evolution loop)
-Task 8: complete (pygame_application integration)
-Tests: 57/57 passing
+Task 1: complete (commits f84f3b8..f2d15a6, models+tests)
+Task 2: complete (place_gas_stations)
+Task 3: complete (travel_with_fuel)
+Task 4: complete (evaluate_permutation + fuel)
+Task 5: complete (SimulationState Postos)
+Task 6: complete (UI fuel log + map)
+Task 7: complete (74/74 tests, fuel exports)
+All tasks complete — awaiting final review

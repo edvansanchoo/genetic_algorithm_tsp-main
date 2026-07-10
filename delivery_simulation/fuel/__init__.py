@@ -1,5 +1,6 @@
 from delivery_simulation.fuel.models import (
     FUEL_STATION_ID_PREFIX,
+    INITIAL_FUEL,
     MAX_FUEL,
     MAX_STATION_DISTANCE_FROM_NETWORK,
     MIN_STATION_SEPARATION,
@@ -13,6 +14,7 @@ from delivery_simulation.fuel.simulation import FuelTravelResult, travel_with_fu
 
 __all__ = [
     "FUEL_STATION_ID_PREFIX",
+    "INITIAL_FUEL",
     "MAX_FUEL",
     "MAX_STATION_DISTANCE_FROM_NETWORK",
     "MIN_STATION_SEPARATION",

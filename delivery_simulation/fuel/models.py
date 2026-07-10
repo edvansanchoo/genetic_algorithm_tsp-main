@@ -5,7 +5,8 @@ from typing import List, Tuple
 
 Coordinate = Tuple[float, float]
 
-MAX_FUEL = 150.0
+MAX_FUEL = 30.0
+INITIAL_FUEL = 30.0
 MAX_STATION_DISTANCE_FROM_NETWORK = 100.0
 FUEL_STATION_ID_PREFIX = "F"
 MIN_STATION_SEPARATION = 30.0
@@ -39,7 +40,7 @@ class FuelStopEvent:
 class RouteFuelReport:
     legs: List[FuelLeg] = field(default_factory=list)
     stops: List[FuelStopEvent] = field(default_factory=list)
-    final_fuel: float = MAX_FUEL
+    final_fuel: float = INITIAL_FUEL
     is_feasible: bool = True
     expanded_node_ids: List[str] = field(default_factory=list)
     total_distance: float = 0.0

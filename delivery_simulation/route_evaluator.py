@@ -5,7 +5,7 @@ from typing import List, Optional, Set
 
 from delivery_simulation.fuel.models import (
     FUEL_STATION_ID_PREFIX,
-    MAX_FUEL,
+    INITIAL_FUEL,
     RouteFuelReport,
 )
 from delivery_simulation.fuel.simulation import travel_with_fuel
@@ -122,7 +122,7 @@ def evaluate_permutation(
         return float("inf"), [], RouteFuelReport(is_feasible=False)
 
     station_ids = _station_ids(road_network)
-    fuel = MAX_FUEL
+    fuel = INITIAL_FUEL
     visited_stations: Set[str] = set()
     report = RouteFuelReport(final_fuel=fuel)
     leg_index = 0

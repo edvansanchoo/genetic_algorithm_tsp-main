@@ -1,7 +1,7 @@
 """Simulador guloso de distribuição de entregas."""
 
 from delivery_simulation.assignment import extract_vehicle_assignments, run_simulation
-from delivery_simulation.fuel.models import MAX_FUEL, GasStation, RouteFuelReport
+from delivery_simulation.fuel.models import INITIAL_FUEL, MAX_FUEL, GasStation, RouteFuelReport
 from delivery_simulation.fuel.placement import place_gas_stations
 from delivery_simulation.fuel.simulation import travel_with_fuel
 from delivery_simulation.models import (
@@ -34,6 +34,7 @@ __all__ = [
     "DeliveryPoint",
     "DeliveryTask",
     "GasStation",
+    "INITIAL_FUEL",
     "MAX_FUEL",
     "RoadNetwork",
     "RouteFuelReport",
