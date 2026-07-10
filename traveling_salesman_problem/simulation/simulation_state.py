@@ -1,89 +1,80 @@
-"""Estado mutável compartilhado durante a simulação."""
+"""Estado mutável da simulação VRP (Camada 2)."""
+
+from __future__ import annotations
 
 import itertools
+import random
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pygame
 
 from traveling_salesman_problem.config.application_settings import ApplicationSettings
 from traveling_salesman_problem.config.visual_theme import VisualTheme
-from traveling_salesman_problem.genetic_algorithm.fitness import (
-    calculate_route_fitness,
-    decompose_route_fitness,
-)
-from traveling_salesman_problem.genetic_algorithm.population import (
-    generate_random_population,
-    sort_population_by_fitness,
-)
-from traveling_salesman_problem.genetic_algorithm.predefined_problems import (
-    get_scenario_coordinates,
-)
-from traveling_salesman_problem.genetic_algorithm.selection import evolve_next_generation
-from traveling_salesman_problem.obstacles.models import Obstacle
-from traveling_salesman_problem.obstacles.placement import (
-    generate_terrain_features_by_type,
-    reshuffle_terrain_feature_positions,
-    sync_terrain_feature_counts,
-)
 from traveling_salesman_problem.problem.city_generator import (
     generate_random_city_coordinate,
     generate_random_priorities,
-    reshuffle_cities_and_population,
 )
+from traveling_salesman_problem.problem.delivery_mesh import DeliveryMesh, build_vrp_mesh
 from traveling_salesman_problem.problem.priority_presets import apply_hospital_priority_preset
+from traveling_salesman_problem.problem.vrp_assignment import (
+    assign_deliveries_greedy,
+    split_into_tokens,
+)
+from traveling_salesman_problem.problem.vrp_models import Coordinate, DeliveryPoint
+from traveling_salesman_problem.simulation.vehicle_genetic import (
+    VehicleGeneticState,
+    initialize_vehicle_genetic,
+    run_vehicle_generation,
+)
 from traveling_salesman_problem.visualization.widgets import (
     ActionButton,
     IntegerSlider,
     MutationSlider,
-    ScenarioSelector,
-    TerrainControlPanel,
     ToggleButton,
 )
 
-CityCoordinate = Tuple[int, int]
-Route = List[CityCoordinate]
+POINT_IDS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 @dataclass
 class SimulationState:
     settings: ApplicationSettings = field(default_factory=ApplicationSettings)
 
-    city_coordinates: List[CityCoordinate] = field(default_factory=list)
-    city_priorities: List[int] = field(default_factory=list)
-    population: List[Route] = field(default_factory=list)
-    terrain_features: List[Obstacle] = field(default_factory=list)
+    depot: Optional[Coordinate] = None
+    deliveries: List[DeliveryPoint] = field(default_factory=list)
+    mesh: Optional[DeliveryMesh] = None
+    assignment: Dict[int, List[DeliveryPoint]] = field(default_factory=dict)
+    vehicle_states: Dict[int, VehicleGeneticState] = field(default_factory=dict)
 
-    best_fitness_history: List[float] = field(default_factory=list)
-    best_route_history: List[Route] = field(default_factory=list)
-
-    generation_counter: itertools.count = field(default_factory=lambda: itertools.count(start=1))
+    generation_counter: itertools.count = field(
+        default_factory=lambda: itertools.count(start=1)
+    )
 
     mutation_slider: Optional[MutationSlider] = None
     priority_weight_slider: Optional[MutationSlider] = None
-    tree_count_slider: Optional[IntegerSlider] = None
-    lake_count_slider: Optional[IntegerSlider] = None
+    vehicle_count_slider: Optional[IntegerSlider] = None
+    capacity_slider: Optional[IntegerSlider] = None
+    transit_count_slider: Optional[IntegerSlider] = None
+    blocked_count_slider: Optional[IntegerSlider] = None
     regenerate_positions_button: Optional[ActionButton] = None
     hospital_preset_button: Optional[ActionButton] = None
-    terrain_control_panel: Optional[TerrainControlPanel] = None
+    focus_filter_button: Optional[ActionButton] = None
     two_opt_toggle: Optional[ToggleButton] = None
-    scenario_selector: Optional[ScenarioSelector] = None
+    mesh_toggle: Optional[ToggleButton] = None
 
-    active_scenario_id: str = "random"
-    effective_number_of_cities: int = 0
+    focus_vehicle_id: Optional[int] = None
+    show_mesh: bool = True
 
-    last_tree_count: int = 0
-    last_lake_count: int = 0
+    last_vehicle_count: int = 0
+    last_capacity: int = 0
+    last_transit_count: int = 0
+    last_blocked_count: int = 0
 
     section_algorithm_y: int = 0
-    section_scenario_y: int = 0
+    section_fleet_y: int = 0
     section_quantity_y: int = 0
     section_actions_y: int = 0
-    section_terrain_y: int = 0
-
-    @property
-    def obstacles(self) -> List[Obstacle]:
-        return self.terrain_features
 
     @property
     def priority_weight(self) -> float:
@@ -91,126 +82,209 @@ class SimulationState:
 
     @property
     def delivery_order_section_y(self) -> int:
-        terrain_panel_y = self.section_terrain_y + 26
-        return terrain_panel_y + self.terrain_control_panel.height + 12
-
-    def calculate_scrollable_content_height(self, delivery_row_count: int) -> int:
-        delivery_panel_y = self.delivery_order_section_y + 26
-        delivery_panel_height = 18 + 6 + delivery_row_count * 16 + 20
-        return delivery_panel_y + delivery_panel_height
-
-    def reset_simulation_history(self) -> None:
-        self.best_fitness_history.clear()
-        self.best_route_history.clear()
-        self.generation_counter = itertools.count(start=1)
-
-    def load_cities_for_scenario(self, scenario_id: str) -> List[CityCoordinate]:
-        fixed_coordinates = get_scenario_coordinates(scenario_id)
-        if fixed_coordinates is not None:
-            return list(fixed_coordinates)
-        settings = self.settings
-        city_count = settings.number_of_cities
-        return [
-            generate_random_city_coordinate(
-                settings.window_width,
-                settings.window_height,
-                settings.plot_horizontal_offset,
-                settings.city_node_radius,
-                self.terrain_features,
-            )
-            for _ in range(city_count)
-        ]
-
-    def apply_scenario(self, scenario_id: str) -> None:
-        settings = self.settings
-        self.active_scenario_id = scenario_id
-        if self.scenario_selector is not None:
-            self.scenario_selector.set_active(scenario_id)
-        self.city_coordinates[:] = self.load_cities_for_scenario(scenario_id)
-        self.effective_number_of_cities = len(self.city_coordinates)
-        self.city_priorities[:] = generate_random_priorities(self.effective_number_of_cities)
-        self.population[:] = generate_random_population(
-            self.city_coordinates,
-            settings.population_size,
+        return (
+            self.section_actions_y
+            + 26
+            + self.settings.regenerate_button_height * 3
+            + VisualTheme.control_gap * 2
+            + 32
+            + 12
+            + 12
         )
-        self.reset_simulation_history()
+
+    def calculate_scrollable_content_height(self, route_line_count: int) -> int:
+        route_panel_y = self.delivery_order_section_y + 26
+        route_panel_height = 8 + max(1, route_line_count) * 16 + 20
+        return route_panel_y + route_panel_height
+
+    def focus_filter_label(self) -> str:
+        if self.focus_vehicle_id is None:
+            return "Filtro: Todos"
+        return f"Filtro: V{self.focus_vehicle_id + 1}"
+
+    def cycle_focus_vehicle(self) -> None:
+        ids = sorted(self.vehicle_states.keys())
+        if not ids:
+            self.focus_vehicle_id = None
+        elif self.focus_vehicle_id is None:
+            self.focus_vehicle_id = ids[0]
+        else:
+            try:
+                index = ids.index(self.focus_vehicle_id)
+            except ValueError:
+                self.focus_vehicle_id = ids[0]
+            else:
+                if index + 1 >= len(ids):
+                    self.focus_vehicle_id = None
+                else:
+                    self.focus_vehicle_id = ids[index + 1]
+        if self.focus_filter_button is not None:
+            self.focus_filter_button.label = self.focus_filter_label()
+
+    def _sync_focus_after_rebuild(self) -> None:
+        if (
+            self.focus_vehicle_id is not None
+            and self.focus_vehicle_id not in self.vehicle_states
+        ):
+            self.focus_vehicle_id = None
+        if self.focus_filter_button is not None:
+            self.focus_filter_button.label = self.focus_filter_label()
+        if self.mesh_toggle is not None:
+            self.show_mesh = self.mesh_toggle.is_active
+
+
+    def map_bounds(self) -> tuple[float, float, float, float]:
+        settings = self.settings
+        return (
+            float(settings.map_minimum_x),
+            float(settings.map_minimum_y),
+            float(settings.map_maximum_x),
+            float(settings.map_maximum_y),
+        )
+
+    def _random_map_point(self) -> Coordinate:
+        settings = self.settings
+        point = generate_random_city_coordinate(
+            settings.window_width,
+            settings.window_height,
+            settings.plot_horizontal_offset,
+            settings.city_node_radius,
+            [],
+        )
+        return (float(point[0]), float(point[1]))
+
+    def _generate_deliveries(self) -> List[DeliveryPoint]:
+        settings = self.settings
+        count = settings.number_of_deliveries
+        priorities = generate_random_priorities(count)
+        deliveries: List[DeliveryPoint] = []
+        for index in range(count):
+            point_id = POINT_IDS[index] if index < len(POINT_IDS) else f"P{index}"
+            deliveries.append(
+                DeliveryPoint(
+                    id=point_id,
+                    coordinate=self._random_map_point(),
+                    priority=priorities[index],
+                    demand=random.randint(settings.min_demand, settings.max_demand),
+                )
+            )
+        return deliveries
+
+    def rebuild_scenario(self) -> None:
+        settings = self.settings
+        vehicle_count = (
+            self.vehicle_count_slider.integer_value
+            if self.vehicle_count_slider is not None
+            else settings.initial_vehicle_count
+        )
+        capacity = (
+            self.capacity_slider.integer_value
+            if self.capacity_slider is not None
+            else settings.initial_capacity
+        )
+        transit_count = (
+            self.transit_count_slider.integer_value
+            if self.transit_count_slider is not None
+            else settings.initial_transit_count
+        )
+        blocked_count = max(
+            1,
+            self.blocked_count_slider.integer_value
+            if self.blocked_count_slider is not None
+            else settings.initial_blocked_count,
+        )
+
+        if self.depot is None or not self.deliveries:
+            self.depot = self._random_map_point()
+            self.deliveries = self._generate_deliveries()
+
+        self.mesh = build_vrp_mesh(
+            self.depot,
+            self.deliveries,
+            self.map_bounds(),
+            transit_count=transit_count,
+            blocked_count=blocked_count,
+            connection_radius=settings.connection_radius,
+        )
+        self.assignment = assign_deliveries_greedy(
+            self.deliveries,
+            vehicle_count=vehicle_count,
+            depot=self.depot,
+        )
+        self.vehicle_states = {}
+        for vehicle_id, points in self.assignment.items():
+            tokens = []
+            for point in points:
+                tokens.extend(split_into_tokens(point, capacity))
+            self.vehicle_states[vehicle_id] = initialize_vehicle_genetic(
+                vehicle_id=vehicle_id,
+                tokens=tokens,
+                population_size=settings.population_size,
+                depot=self.depot,
+                mesh=self.mesh,
+                capacity=capacity,
+                priority_weight=self.priority_weight if self.priority_weight_slider else 0.0,
+                reuse_penalty=settings.edge_reuse_penalty,
+            )
+
+        self.generation_counter = itertools.count(start=1)
+        self.last_vehicle_count = vehicle_count
+        self.last_capacity = capacity
+        self.last_transit_count = transit_count
+        self.last_blocked_count = blocked_count
+        self._sync_focus_after_rebuild()
+
+    def shuffle_all(self) -> None:
+        self.depot = None
+        self.deliveries = []
+        self.rebuild_scenario()
+
+    def apply_hospital_preset(self) -> None:
+        if not self.deliveries:
+            return
+        priorities = apply_hospital_priority_preset(len(self.deliveries))
+        self.deliveries = [
+            DeliveryPoint(
+                id=point.id,
+                coordinate=point.coordinate,
+                priority=priorities[index],
+                demand=point.demand,
+            )
+            for index, point in enumerate(self.deliveries)
+        ]
+        self.rebuild_scenario()
 
     def initialize(self) -> None:
-        settings = self.settings
-
-        self.terrain_features = generate_terrain_features_by_type(
-            settings.initial_tree_count,
-            settings.initial_lake_count,
-            settings.map_minimum_x,
-            settings.map_minimum_y,
-            settings.map_maximum_x,
-            settings.map_maximum_y,
-            enabled=False,
-        )
-
-        self.city_coordinates = [
-            generate_random_city_coordinate(
-                settings.window_width,
-                settings.window_height,
-                settings.plot_horizontal_offset,
-                settings.city_node_radius,
-                self.terrain_features,
-            )
-            for _ in range(settings.number_of_cities)
-        ]
-
-        self.city_priorities = generate_random_priorities(settings.number_of_cities)
-
-        self.population = generate_random_population(
-            self.city_coordinates,
-            settings.population_size,
-        )
-
-        self.effective_number_of_cities = len(self.city_coordinates)
-
         self._create_control_widgets()
-        self.last_tree_count = settings.initial_tree_count
-        self.last_lake_count = settings.initial_lake_count
+        self.shuffle_all()
 
     def _create_control_widgets(self) -> None:
         settings = self.settings
         controls_width = settings.plot_horizontal_offset - 2 * VisualTheme.control_margin
         half_width = (controls_width - VisualTheme.control_gap) // 2
-        saved_two_opt_active = (
+        saved_two_opt = (
             self.two_opt_toggle.is_active if self.two_opt_toggle is not None else False
+        )
+        saved_show_mesh = (
+            self.mesh_toggle.is_active if self.mesh_toggle is not None else self.show_mesh
         )
 
         self.section_algorithm_y = 0
         mutation_y = self.section_algorithm_y + 26
-        priority_weight_y = mutation_y + settings.mutation_slider_height + 12
-        two_opt_y = priority_weight_y + settings.mutation_slider_height + 12
-        self.section_scenario_y = two_opt_y + 32 + 12
-        scenario_selector_y = self.section_scenario_y + 26
+        priority_y = mutation_y + settings.mutation_slider_height + 12
+        two_opt_y = priority_y + settings.mutation_slider_height + 12
+        mesh_toggle_y = two_opt_y + 32 + 12
 
-        self.two_opt_toggle = ToggleButton(
-            position_x=VisualTheme.control_margin,
-            position_y=two_opt_y,
-            width=controls_width,
-            height=32,
-            label="Refinamento 2-opt",
-            is_active=saved_two_opt_active,
-        )
+        self.section_fleet_y = mesh_toggle_y + 32 + 12
+        fleet_y = self.section_fleet_y + 26
 
-        self.scenario_selector = ScenarioSelector(
-            position_x=VisualTheme.control_margin,
-            position_y=scenario_selector_y,
-            width=controls_width,
-            viewport_height=settings.scenario_selector_viewport_height,
-            active_scenario_id=self.active_scenario_id,
-        )
+        self.section_quantity_y = fleet_y + settings.count_slider_height + 12
+        mesh_y = self.section_quantity_y + 26
 
-        self.section_quantity_y = scenario_selector_y + settings.scenario_selector_viewport_height + 12
-        terrain_count_y = self.section_quantity_y + 26
-        self.section_actions_y = terrain_count_y + settings.count_slider_height + 12
+        self.section_actions_y = mesh_y + settings.count_slider_height + 12
         regenerate_y = self.section_actions_y + 26
-        hospital_preset_y = regenerate_y + settings.regenerate_button_height + VisualTheme.control_gap
-        self.section_terrain_y = hospital_preset_y + settings.regenerate_button_height + 12
-        terrain_panel_y = self.section_terrain_y + 26
+        hospital_y = regenerate_y + settings.regenerate_button_height + VisualTheme.control_gap
+        focus_y = hospital_y + settings.regenerate_button_height + VisualTheme.control_gap
 
         self.mutation_slider = MutationSlider(
             position_x=VisualTheme.control_margin,
@@ -221,10 +295,9 @@ class SimulationState:
             label="Taxa de mutação",
             value_suffix="%",
         )
-
         self.priority_weight_slider = MutationSlider(
             position_x=VisualTheme.control_margin,
-            position_y=priority_weight_y,
+            position_y=priority_y,
             width=controls_width,
             height=settings.mutation_slider_height,
             value=settings.initial_priority_weight,
@@ -233,198 +306,177 @@ class SimulationState:
             label="Peso da prioridade",
             value_suffix="",
         )
-
-        self.tree_count_slider = IntegerSlider(
+        self.two_opt_toggle = ToggleButton(
             position_x=VisualTheme.control_margin,
-            position_y=terrain_count_y,
+            position_y=two_opt_y,
+            width=controls_width,
+            height=32,
+            label="Refinamento 2-opt",
+            is_active=saved_two_opt,
+        )
+        self.mesh_toggle = ToggleButton(
+            position_x=VisualTheme.control_margin,
+            position_y=mesh_toggle_y,
+            width=controls_width,
+            height=32,
+            label="Mostrar malha",
+            is_active=saved_show_mesh,
+        )
+        self.show_mesh = saved_show_mesh
+        self.vehicle_count_slider = IntegerSlider(
+            position_x=VisualTheme.control_margin,
+            position_y=fleet_y,
             width=half_width,
             height=settings.count_slider_height,
-            value=settings.initial_tree_count,
-            minimum_value=0,
-            maximum_value=settings.maximum_terrain_features_per_type,
-            label="Árvores",
+            value=settings.initial_vehicle_count,
+            minimum_value=1,
+            maximum_value=settings.maximum_vehicle_count,
+            label="Veículos",
         )
-
-        self.lake_count_slider = IntegerSlider(
+        self.capacity_slider = IntegerSlider(
             position_x=VisualTheme.control_margin + half_width + VisualTheme.control_gap,
-            position_y=terrain_count_y,
+            position_y=fleet_y,
             width=half_width,
             height=settings.count_slider_height,
-            value=settings.initial_lake_count,
-            minimum_value=0,
-            maximum_value=settings.maximum_terrain_features_per_type,
-            label="Lagos",
+            value=settings.initial_capacity,
+            minimum_value=settings.minimum_capacity,
+            maximum_value=settings.maximum_capacity,
+            label="Capacidade",
         )
-
+        self.transit_count_slider = IntegerSlider(
+            position_x=VisualTheme.control_margin,
+            position_y=mesh_y,
+            width=half_width,
+            height=settings.count_slider_height,
+            value=settings.initial_transit_count,
+            minimum_value=0,
+            maximum_value=settings.maximum_mesh_nodes_per_type,
+            label="Trânsito",
+        )
+        self.blocked_count_slider = IntegerSlider(
+            position_x=VisualTheme.control_margin + half_width + VisualTheme.control_gap,
+            position_y=mesh_y,
+            width=half_width,
+            height=settings.count_slider_height,
+            value=max(1, settings.initial_blocked_count),
+            minimum_value=1,
+            maximum_value=settings.maximum_mesh_nodes_per_type,
+            label="Bloqueados",
+        )
         self.regenerate_positions_button = ActionButton(
             position_x=VisualTheme.control_margin,
             position_y=regenerate_y,
             width=controls_width,
             height=settings.regenerate_button_height,
             label="Sortear posições",
-            subtitle="Árvores, lagos e cidades",
+            subtitle="Depósito, entregas e malha",
         )
-
         self.hospital_preset_button = ActionButton(
             position_x=VisualTheme.control_margin,
-            position_y=hospital_preset_y,
+            position_y=hospital_y,
             width=controls_width,
             height=settings.regenerate_button_height,
             label="Cenário hospitalar",
             subtitle="Prioridades críticas fixas",
         )
-
-        self.terrain_control_panel = TerrainControlPanel(
+        self.focus_filter_button = ActionButton(
             position_x=VisualTheme.control_margin,
-            position_y=terrain_panel_y,
+            position_y=focus_y,
             width=controls_width,
-            terrain_features=self.terrain_features,
-        )
-
-    def synchronize_terrain_from_sliders(self) -> None:
-        settings = self.settings
-        sync_terrain_feature_counts(
-            self.terrain_features,
-            self.tree_count_slider.integer_value,
-            self.lake_count_slider.integer_value,
-            settings.map_minimum_x,
-            settings.map_minimum_y,
-            settings.map_maximum_x,
-            settings.map_maximum_y,
-        )
-        self.terrain_control_panel.tree_penalty_slider.apply_penalty_to_terrain()
-        self.terrain_control_panel.lake_penalty_slider.apply_penalty_to_terrain()
-        self.terrain_control_panel.rebuild(self.terrain_features)
-
-    def apply_hospital_preset(self) -> None:
-        self.city_priorities[:] = apply_hospital_priority_preset(len(self.city_coordinates))
-
-    def shuffle_terrain_and_cities(self) -> None:
-        if self.active_scenario_id != "random":
-            self.apply_scenario("random")
-        settings = self.settings
-        reshuffle_terrain_feature_positions(
-            self.terrain_features,
-            settings.map_minimum_x,
-            settings.map_minimum_y,
-            settings.map_maximum_x,
-            settings.map_maximum_y,
-        )
-        self.terrain_control_panel.rebuild(self.terrain_features)
-        reshuffle_cities_and_population(
-            self.city_coordinates,
-            self.city_priorities,
-            self.effective_number_of_cities,
-            settings.population_size,
-            self.population,
-            self.best_fitness_history,
-            self.best_route_history,
-            settings.window_width,
-            settings.window_height,
-            settings.plot_horizontal_offset,
-            settings.city_node_radius,
-            self.terrain_features,
+            height=settings.regenerate_button_height,
+            label=self.focus_filter_label(),
+            subtitle="Cicla Todos → V1 → V2 → …",
         )
 
     def handle_control_events(self, event: pygame.event.Event) -> None:
         self.mutation_slider.handle_event(event)
         self.priority_weight_slider.handle_event(event)
         self.two_opt_toggle.handle_event(event)
-        self.scenario_selector.handle_event(event)
-        self.tree_count_slider.handle_event(event)
-        self.lake_count_slider.handle_event(event)
+        self.mesh_toggle.handle_event(event)
+        self.vehicle_count_slider.handle_event(event)
+        self.capacity_slider.handle_event(event)
+        self.transit_count_slider.handle_event(event)
+        self.blocked_count_slider.handle_event(event)
         self.regenerate_positions_button.handle_event(event)
         self.hospital_preset_button.handle_event(event)
-        self.terrain_control_panel.handle_event(event)
+        self.focus_filter_button.handle_event(event)
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+            self.apply_hospital_preset()
 
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_o:
-                toggle = self.terrain_control_panel.global_penalty_toggle
-                toggle.is_active = not toggle.is_active
-            elif event.key == pygame.K_p:
-                self.apply_hospital_preset()
-
-    def update_terrain_counts_if_changed(self) -> None:
-        if self.scenario_selector.was_changed:
-            self.scenario_selector.was_changed = False
-            self.apply_scenario(self.scenario_selector.active_scenario_id)
+    def update_controls_if_changed(self) -> None:
+        if self.mesh_toggle is not None:
+            self.show_mesh = self.mesh_toggle.is_active
+        if self.focus_filter_button.was_pressed:
+            self.focus_filter_button.was_pressed = False
+            self.cycle_focus_vehicle()
             return
-
         if self.hospital_preset_button.was_pressed:
             self.hospital_preset_button.was_pressed = False
             self.apply_hospital_preset()
             return
-
         if self.regenerate_positions_button.was_pressed:
             self.regenerate_positions_button.was_pressed = False
-            self.shuffle_terrain_and_cities()
-            self.last_tree_count = self.tree_count_slider.integer_value
-            self.last_lake_count = self.lake_count_slider.integer_value
+            self.shuffle_all()
+            return
+        if any(
+            slider.is_dragging
+            for slider in (
+                self.vehicle_count_slider,
+                self.capacity_slider,
+                self.transit_count_slider,
+                self.blocked_count_slider,
+            )
+        ):
             return
 
-        if self.tree_count_slider.is_dragging or self.lake_count_slider.is_dragging:
-            return
+        vehicle_count = self.vehicle_count_slider.integer_value
+        capacity = self.capacity_slider.integer_value
+        transit_count = self.transit_count_slider.integer_value
+        blocked_count = self.blocked_count_slider.integer_value
+        if (
+            vehicle_count != self.last_vehicle_count
+            or capacity != self.last_capacity
+            or transit_count != self.last_transit_count
+            or blocked_count != self.last_blocked_count
+        ):
+            self.rebuild_scenario()
 
-        current_trees = self.tree_count_slider.integer_value
-        current_lakes = self.lake_count_slider.integer_value
-        if current_trees != self.last_tree_count or current_lakes != self.last_lake_count:
-            self.synchronize_terrain_from_sliders()
-            self.last_tree_count = current_trees
-            self.last_lake_count = current_lakes
-
-    def run_one_generation(self) -> tuple[int, float, Route, Route, float, float]:
-        settings = self.settings
-        use_penalties = self.terrain_control_panel.use_terrain_penalties
+    def run_one_generation(self) -> tuple:
+        capacity = self.capacity_slider.integer_value
         mutation_probability = self.mutation_slider.value
         priority_weight = self.priority_weight
 
-        population_fitness = [
-            calculate_route_fitness(
-                route,
-                self.terrain_features,
-                use_penalties,
-                self.city_coordinates,
-                self.city_priorities,
-                priority_weight,
+        for vehicle_id, state in list(self.vehicle_states.items()):
+            self.vehicle_states[vehicle_id] = run_vehicle_generation(
+                state,
+                depot=self.depot,
+                mesh=self.mesh,
+                capacity=capacity,
+                priority_weight=priority_weight,
+                mutation_probability=mutation_probability,
+                use_2opt=self.two_opt_toggle.is_active,
+                reuse_penalty=self.settings.edge_reuse_penalty,
             )
-            for route in self.population
-        ]
-
-        self.population, population_fitness = sort_population_by_fitness(
-            self.population,
-            population_fitness,
-        )
-
-        best_route = self.population[0]
-        best_fitness, best_distance, best_weighted_priority = decompose_route_fitness(
-            best_route,
-            self.terrain_features,
-            use_penalties,
-            self.city_coordinates,
-            self.city_priorities,
-            priority_weight,
-        )
-        second_best_route = self.population[1]
-
-        self.best_fitness_history.append(best_fitness)
-        self.best_route_history.append(best_route)
-
-        self.population = evolve_next_generation(
-            self.population,
-            population_fitness,
-            settings.population_size,
-            mutation_probability,
-            mutation_type="adjacent",
-            n_elite=3,
-            use_2opt=self.two_opt_toggle.is_active,
-        )
 
         generation_number = next(self.generation_counter)
+        total_fitness = 0.0
+        total_distance = 0.0
+        total_priority = 0.0
+        plans = {}
+        histories = {}
+        for vehicle_id, state in self.vehicle_states.items():
+            total_fitness += state.best_fitness if state.best_fitness != float("inf") else 0.0
+            if state.best_plan is not None:
+                total_distance += state.best_plan.total_distance if state.best_plan.total_distance != float("inf") else 0.0
+                total_priority += state.best_plan.priority_penalty * priority_weight
+                plans[vehicle_id] = state.best_plan
+            histories[vehicle_id] = list(state.fitness_history)
+
         return (
             generation_number,
-            best_fitness,
-            best_route,
-            second_best_route,
-            best_distance,
-            best_weighted_priority,
+            total_fitness,
+            total_distance,
+            total_priority,
+            plans,
+            histories,
         )
