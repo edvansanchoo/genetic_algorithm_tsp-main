@@ -20,6 +20,21 @@ class ApplicationSettings:
     initial_lake_count: int = 2
     maximum_terrain_features_per_type: int = 8
 
+    initial_transit_count: int = 8
+    initial_blocked_count: int = 2
+    maximum_mesh_nodes_per_type: int = 20
+    connection_radius: float = 140.0
+    edge_reuse_penalty: float = 1.75
+
+    initial_vehicle_count: int = 2
+    maximum_vehicle_count: int = 5
+    initial_capacity: int = 10
+    minimum_capacity: int = 1
+    maximum_capacity: int = 30
+    min_demand: int = 1
+    max_demand: int = 12
+    number_of_deliveries: int = 12
+
     map_margin: int = 20
     city_node_radius: int = 9
 

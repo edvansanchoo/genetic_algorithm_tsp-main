@@ -1,9 +1,14 @@
 """Cálculo de distância e avaliação de rotas."""
 
+from __future__ import annotations
+
 import math
-from typing import Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 
 from traveling_salesman_problem.obstacles.penalty import calculate_segment_obstacle_penalty
+
+if TYPE_CHECKING:
+    from traveling_salesman_problem.problem.delivery_mesh import DeliveryMesh
 
 CityCoordinate = Tuple[float, float]
 Route = List[CityCoordinate]
@@ -23,8 +28,27 @@ def calculate_route_distance(
     route: Route,
     obstacles: Optional[List[Any]] = None,
     use_obstacle_penalties: bool = True,
+    mesh: Optional["DeliveryMesh"] = None,
 ) -> float:
-    """Soma distâncias do ciclo fechado e penalidades opcionais de terreno."""
+    """Soma distâncias do ciclo (malha se fornecida; senão euclidiana + terreno)."""
+    if mesh is not None:
+        from traveling_salesman_problem.problem.delivery_mesh import (
+            delivery_segment_distance,
+        )
+
+        total_cost = 0.0
+        number_of_cities = len(route)
+        for city_index in range(number_of_cities):
+            segment = delivery_segment_distance(
+                mesh,
+                route[city_index],
+                route[(city_index + 1) % number_of_cities],
+            )
+            if segment == float("inf"):
+                return float("inf")
+            total_cost += segment
+        return total_cost
+
     total_cost = 0.0
     number_of_cities = len(route)
 
@@ -109,14 +133,20 @@ def calculate_route_fitness(
     city_coordinates: Optional[List[CityCoordinate]] = None,
     priorities: Optional[List[int]] = None,
     priority_weight: float = 0.0,
+    mesh: Optional["DeliveryMesh"] = None,
 ) -> float:
     """
     Avalia uma rota pelo custo total do ciclo fechado.
 
-    O custo inclui distância, penalidades de terreno opcionais
-    e penalidade ponderada por prioridade de entrega.
+    O custo inclui distância (malha ou euclidiana), penalidades de terreno
+    opcionais no fallback e penalidade ponderada por prioridade de entrega.
     """
-    distance = calculate_route_distance(route, obstacles, use_obstacle_penalties)
+    distance = calculate_route_distance(
+        route,
+        obstacles,
+        use_obstacle_penalties,
+        mesh=mesh,
+    )
 
     if priority_weight <= 0 or not city_coordinates or not priorities:
         return distance
@@ -132,9 +162,15 @@ def decompose_route_fitness(
     city_coordinates: Optional[List[CityCoordinate]] = None,
     priorities: Optional[List[int]] = None,
     priority_weight: float = 0.0,
+    mesh: Optional["DeliveryMesh"] = None,
 ) -> Tuple[float, float, float]:
     """Retorna (fitness_total, distância, penalidade_prioridade_ponderada)."""
-    distance = calculate_route_distance(route, obstacles, use_obstacle_penalties)
+    distance = calculate_route_distance(
+        route,
+        obstacles,
+        use_obstacle_penalties,
+        mesh=mesh,
+    )
     weighted_priority_penalty = 0.0
 
     if priority_weight > 0 and city_coordinates and priorities:
@@ -147,17 +183,18 @@ def decompose_route_fitness(
     fitness_total = distance + weighted_priority_penalty
     return fitness_total, distance, weighted_priority_penalty
 
-def add_2opt(route):
-    """Melhora um rota aplicando 2-opt."""
+
+def add_2opt(route, mesh: Optional["DeliveryMesh"] = None):
+    """Melhora uma rota aplicando 2-opt."""
     improved_route = list(route)
 
     if len(improved_route) < 4:
         return improved_route
-    
+
     improved = True
     while improved:
         improved = False
-        current_distance = calculate_route_distance(improved_route)
+        current_distance = calculate_route_distance(improved_route, mesh=mesh)
 
         for first_index in range(len(improved_route) - 1):
             for second_index in range(first_index + 1, len(improved_route)):
@@ -169,12 +206,14 @@ def add_2opt(route):
                     candidate_route[first_index + 1:second_index + 1]
                 )
 
-                candidate_distace = calculate_route_distance(candidate_route)
+                candidate_distance = calculate_route_distance(
+                    candidate_route,
+                    mesh=mesh,
+                )
 
-                if candidate_distace < current_distance:
+                if candidate_distance < current_distance:
                     improved_route = candidate_route
-                    current_distance = candidate_route
-                    current_distance = candidate_distace
+                    current_distance = candidate_distance
                     improved = True
                     break
             if improved:

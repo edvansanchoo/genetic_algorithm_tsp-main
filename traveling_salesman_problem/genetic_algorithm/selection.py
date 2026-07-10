@@ -36,9 +36,10 @@ def evolve_next_generation(
     fitness_values: List[float],
     population_size: int,
     mutation_probability: float,
-    mutation_type: str = "adjacent", # seleciona o tipo de mutação adjacent/random,
-    n_elite: int = 2, # elitismo para guardar "os melhores" para a próxima geração
+    mutation_type: str = "adjacent",  # seleciona o tipo de mutação adjacent/random
+    n_elite: int = 2,  # elitismo para guardar "os melhores" para a próxima geração
     use_2opt: bool = False,
+    mesh=None,
 ) -> List[Route]:
     """
     Produz a próxima geração com elitismo, cruzamento e mutação.
@@ -46,12 +47,15 @@ def evolve_next_generation(
     O melhor indivíduo da geração atual é copiado sem alteração;
     os demais são gerados por seleção, crossover e mutação.
     """
+    safe_fitness = [
+        value if value != float("inf") else 1e18 for value in fitness_values
+    ]
     new_population = [population[0]]
 
     while len(new_population) < population_size:
         first_parent, second_parent = select_two_parents_by_fitness_weight(
             population,
-            fitness_values,
+            safe_fitness,
         )
         child_route = order_crossover(first_parent, second_parent)
         child_route = apply_mutation(
@@ -63,7 +67,7 @@ def evolve_next_generation(
         # 2-opt costuma reduzir drasticamente, achando boas rotas mais cedo
         # em contrapartida 2-opt custa mais no processamento por geração
         if use_2opt:
-            child_route = add_2opt(child_route)
+            child_route = add_2opt(child_route, mesh=mesh)
 
         new_population.append(child_route)
 

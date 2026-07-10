@@ -68,7 +68,7 @@ class TwoOptToggleTests(unittest.TestCase):
 
     @patch("traveling_salesman_problem.genetic_algorithm.selection.add_2opt")
     def test_use_2opt_true_calls_add_2opt(self, mock_add_2opt):
-        mock_add_2opt.side_effect = lambda route: route
+        mock_add_2opt.side_effect = lambda route, mesh=None: route
         evolve_next_generation(
             self.population,
             self.fitness_values,
