@@ -51,6 +51,30 @@ class RoadNetworkTests(unittest.TestCase):
         network = build_road_network(nodes, radius=10.0)
         self.assertAlmostEqual(path_distance(network, ["D0", "D1"]), 5.0)
 
+    def test_build_complete_graph_connects_all_pairs(self):
+        from traveling_salesman_problem.problem.road_network import build_complete_graph
+
+        nodes = {
+            "D0": (0.0, 0.0),
+            "D1": (5.0, 0.0),
+            "T1": (2.0, 3.0),
+            "T2": (8.0, 1.0),
+        }
+        edges = build_complete_graph(nodes)
+        self.assertEqual(len(edges), 6)
+        edge_set = {tuple(sorted(pair)) for pair in edges}
+        self.assertIn(("D0", "D1"), edge_set)
+        self.assertIn(("D0", "T2"), edge_set)
+        self.assertIn(("T1", "T2"), edge_set)
+
+    def test_build_complete_network_has_zero_radius(self):
+        from traveling_salesman_problem.problem.road_network import build_complete_network
+
+        nodes = {"A": (0.0, 0.0), "B": (100.0, 0.0)}
+        network = build_complete_network(nodes)
+        self.assertEqual(len(network.edges), 1)
+        self.assertEqual(network.connection_radius, 0.0)
+
 
 class DeliveryMeshTests(unittest.TestCase):
     def test_blocked_node_never_on_path(self):

@@ -70,6 +70,23 @@ def build_radius_graph(nodes: Dict[str, Coordinate], radius: float) -> List[Tupl
     return edges
 
 
+def build_complete_graph(nodes: Dict[str, Coordinate]) -> List[Tuple[str, str]]:
+    node_ids = list(nodes.keys())
+    edges: List[Tuple[str, str]] = []
+    for index, node_a in enumerate(node_ids):
+        for node_b in node_ids[index + 1 :]:
+            edges.append((node_a, node_b))
+    return edges
+
+
+def build_complete_network(nodes: Dict[str, Coordinate]) -> RoadNetwork:
+    return RoadNetwork(
+        nodes=dict(nodes),
+        edges=build_complete_graph(nodes),
+        connection_radius=0.0,
+    )
+
+
 def build_road_network(nodes: Dict[str, Coordinate], radius: float) -> RoadNetwork:
     return RoadNetwork(
         nodes=dict(nodes),
