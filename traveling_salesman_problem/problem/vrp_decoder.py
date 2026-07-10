@@ -8,7 +8,6 @@ from typing import List, Optional, Set, Tuple
 
 from traveling_salesman_problem.problem.delivery_mesh import (
     DeliveryMesh,
-    delivery_segment_distance,
     delivery_segment_path,
 )
 from traveling_salesman_problem.problem.road_network import (
@@ -54,38 +53,55 @@ def _edges_from_path(path: List[str]) -> Set[EdgeKey]:
     return edges
 
 
-def _return_segment(
+def _segment_with_plan_memory(
     mesh: DeliveryMesh,
     origin: Coordinate,
     destination: Coordinate,
-    trip_edges: Set[EdgeKey],
-    return_fallback_penalty: float,
+    plan_edges: Set[EdgeKey],
+    plan_fallback_penalty: float,
+    plan_last_resort_penalty: float,
 ) -> Optional[Tuple[float, List[str]]]:
     path = delivery_segment_path(
         mesh,
         origin,
         destination,
-        forbidden_edges=trip_edges,
+        forbidden_edges=plan_edges,
     )
     if path:
         cost = path_distance(mesh.network, path)
-        return cost, path
+    else:
+        path = delivery_segment_path(
+            mesh,
+            origin,
+            destination,
+            used_edges=plan_edges,
+            reuse_penalty=plan_fallback_penalty,
+        )
+        if path:
+            cost = path_weighted_distance(
+                mesh.network,
+                path,
+                plan_edges,
+                plan_fallback_penalty,
+            )
+        else:
+            path = delivery_segment_path(
+                mesh,
+                origin,
+                destination,
+                used_edges=plan_edges,
+                reuse_penalty=plan_last_resort_penalty,
+            )
+            if not path:
+                return None
+            cost = path_weighted_distance(
+                mesh.network,
+                path,
+                plan_edges,
+                plan_last_resort_penalty,
+            )
 
-    path = delivery_segment_path(
-        mesh,
-        origin,
-        destination,
-        used_edges=trip_edges,
-        reuse_penalty=return_fallback_penalty,
-    )
-    if not path:
-        return None
-    cost = path_weighted_distance(
-        mesh.network,
-        path,
-        trip_edges,
-        return_fallback_penalty,
-    )
+    plan_edges.update(_edges_from_path(path))
     return cost, path
 
 
@@ -96,8 +112,8 @@ def decode_vehicle_permutation(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float = 0.0,
-    reuse_penalty: float = 1.75,
-    return_fallback_penalty: float = 20.0,
+    plan_fallback_penalty: float = 20.0,
+    plan_last_resort_penalty: float = 1.75,
 ) -> DecodedVehiclePlan:
     if capacity < 1:
         return _invalid_plan()
@@ -121,54 +137,23 @@ def decode_vehicle_permutation(
     last_coordinate = depot
     visit_order = 0
     priority_penalty = 0.0
-    used_edges: Set[EdgeKey] = set()
-    trip_edges: Set[EdgeKey] = set()
-
-    def _record_path(path: List[str]) -> None:
-        path_edges = _edges_from_path(path)
-        used_edges.update(path_edges)
-        trip_edges.update(path_edges)
-
-    def traverse_non_return(
-        from_coord: Coordinate,
-        to_coord: Coordinate,
-    ) -> Optional[Tuple[float, List[str]]]:
-        path = delivery_segment_path(
-            mesh,
-            from_coord,
-            to_coord,
-            used_edges=used_edges,
-            reuse_penalty=reuse_penalty,
-        )
-        if not path:
-            return None
-        cost = delivery_segment_distance(
-            mesh,
-            from_coord,
-            to_coord,
-            used_edges=used_edges,
-            reuse_penalty=reuse_penalty,
-        )
-        if cost == float("inf"):
-            return None
-        _record_path(path)
-        return cost, path
+    plan_edges: Set[EdgeKey] = set()
 
     def close_trip_returning_to_depot() -> Optional[DecodedVehiclePlan]:
-        nonlocal current_stops, current_paths, current_distance, last_coordinate, trip_edges
-        result = _return_segment(
+        nonlocal current_stops, current_paths, current_distance, last_coordinate
+        result = _segment_with_plan_memory(
             mesh,
             last_coordinate,
             depot,
-            trip_edges,
-            return_fallback_penalty,
+            plan_edges,
+            plan_fallback_penalty,
+            plan_last_resort_penalty,
         )
         if result is None:
             return _invalid_plan()
         cost, path = result
         current_distance += cost
         current_paths.append(path)
-        used_edges.update(_edges_from_path(path))
         current_stops.append(
             TripStop(node_id=DEPOT_ID, quantity=0, coordinate=depot)
         )
@@ -185,7 +170,6 @@ def decode_vehicle_permutation(
         current_paths = []
         current_distance = 0.0
         last_coordinate = depot
-        trip_edges = set()
         return None
 
     for token in permutation:
@@ -206,7 +190,14 @@ def decode_vehicle_permutation(
         if delivery_coordinate is None:
             return _invalid_plan()
 
-        result = traverse_non_return(last_coordinate, delivery_coordinate)
+        result = _segment_with_plan_memory(
+            mesh,
+            last_coordinate,
+            delivery_coordinate,
+            plan_edges,
+            plan_fallback_penalty,
+            plan_last_resort_penalty,
+        )
         if result is None:
             return _invalid_plan()
         cost, path = result

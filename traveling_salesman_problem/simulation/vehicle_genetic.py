@@ -93,8 +93,8 @@ def _evaluate(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float,
-    reuse_penalty: float = 1.75,
-    return_fallback_penalty: float = 20.0,
+    plan_fallback_penalty: float = 20.0,
+    plan_last_resort_penalty: float = 1.75,
 ) -> DecodedVehiclePlan:
     return decode_vehicle_permutation(
         tokens,
@@ -103,8 +103,8 @@ def _evaluate(
         mesh,
         capacity,
         priority_weight,
-        reuse_penalty=reuse_penalty,
-        return_fallback_penalty=return_fallback_penalty,
+        plan_fallback_penalty=plan_fallback_penalty,
+        plan_last_resort_penalty=plan_last_resort_penalty,
     )
 
 
@@ -116,8 +116,8 @@ def initialize_vehicle_genetic(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float,
-    reuse_penalty: float = 1.75,
-    return_fallback_penalty: float = 20.0,
+    plan_fallback_penalty: float = 20.0,
+    plan_last_resort_penalty: float = 1.75,
 ) -> VehicleGeneticState:
     if not tokens:
         empty = VehicleGeneticState(
@@ -146,8 +146,8 @@ def initialize_vehicle_genetic(
             mesh,
             capacity,
             priority_weight,
-            reuse_penalty,
-            return_fallback_penalty,
+            plan_fallback_penalty,
+            plan_last_resort_penalty,
         )
         ranked.append((plan.fitness, individual, plan))
     ranked.sort(key=lambda item: item[0])
@@ -174,8 +174,8 @@ def run_vehicle_generation(
     mutation_probability: float,
     use_2opt: bool = False,
     n_elite: int = 2,
-    reuse_penalty: float = 1.75,
-    return_fallback_penalty: float = 20.0,
+    plan_fallback_penalty: float = 20.0,
+    plan_last_resort_penalty: float = 1.75,
 ) -> VehicleGeneticState:
     del use_2opt  # reserved; decoder-aware 2-opt deferred
     if not state.tokens:
@@ -191,8 +191,8 @@ def run_vehicle_generation(
             mesh,
             capacity,
             priority_weight,
-            reuse_penalty,
-            return_fallback_penalty,
+            plan_fallback_penalty,
+            plan_last_resort_penalty,
         )
         evaluated.append((plan.fitness, individual, plan))
     evaluated.sort(key=lambda item: item[0])

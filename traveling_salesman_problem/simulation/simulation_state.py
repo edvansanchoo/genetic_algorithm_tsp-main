@@ -224,8 +224,8 @@ class SimulationState:
                 mesh=self.mesh,
                 capacity=capacity,
                 priority_weight=self.priority_weight if self.priority_weight_slider else 0.0,
-                reuse_penalty=settings.edge_reuse_penalty,
-                return_fallback_penalty=settings.return_fallback_penalty,
+                plan_fallback_penalty=settings.plan_fallback_penalty,
+                plan_last_resort_penalty=settings.plan_last_resort_penalty,
             )
 
         self.generation_counter = itertools.count(start=1)
@@ -456,8 +456,8 @@ class SimulationState:
                 priority_weight=priority_weight,
                 mutation_probability=mutation_probability,
                 use_2opt=self.two_opt_toggle.is_active,
-                reuse_penalty=self.settings.edge_reuse_penalty,
-                return_fallback_penalty=self.settings.return_fallback_penalty,
+                plan_fallback_penalty=self.settings.plan_fallback_penalty,
+                plan_last_resort_penalty=self.settings.plan_last_resort_penalty,
             )
 
         generation_number = next(self.generation_counter)

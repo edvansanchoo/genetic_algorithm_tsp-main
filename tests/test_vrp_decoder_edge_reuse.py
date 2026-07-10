@@ -54,7 +54,6 @@ class VrpDecoderEdgeReuseTests(unittest.TestCase):
             (0.0, 0.0),
             mesh,
             capacity=10,
-            reuse_penalty=1.75,
         )
         self.assertEqual(len(plan.trips), 1)
         trip = plan.trips[0]
@@ -71,7 +70,6 @@ class VrpDecoderEdgeReuseTests(unittest.TestCase):
             (0.0, 0.0),
             mesh,
             capacity=10,
-            reuse_penalty=1.75,
         )
         self.assertTrue(plan.fitness < float("inf"))
         self.assertEqual(plan.trips[0].path_node_ids[0], [DEPOT_ID, "X"])
