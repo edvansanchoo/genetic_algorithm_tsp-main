@@ -94,6 +94,7 @@ def _evaluate(
     capacity: int,
     priority_weight: float,
     reuse_penalty: float = 1.75,
+    return_fallback_penalty: float = 20.0,
 ) -> DecodedVehiclePlan:
     return decode_vehicle_permutation(
         tokens,
@@ -103,6 +104,7 @@ def _evaluate(
         capacity,
         priority_weight,
         reuse_penalty=reuse_penalty,
+        return_fallback_penalty=return_fallback_penalty,
     )
 
 
@@ -115,6 +117,7 @@ def initialize_vehicle_genetic(
     capacity: int,
     priority_weight: float,
     reuse_penalty: float = 1.75,
+    return_fallback_penalty: float = 20.0,
 ) -> VehicleGeneticState:
     if not tokens:
         empty = VehicleGeneticState(
@@ -144,6 +147,7 @@ def initialize_vehicle_genetic(
             capacity,
             priority_weight,
             reuse_penalty,
+            return_fallback_penalty,
         )
         ranked.append((plan.fitness, individual, plan))
     ranked.sort(key=lambda item: item[0])
@@ -171,6 +175,7 @@ def run_vehicle_generation(
     use_2opt: bool = False,
     n_elite: int = 2,
     reuse_penalty: float = 1.75,
+    return_fallback_penalty: float = 20.0,
 ) -> VehicleGeneticState:
     del use_2opt  # reserved; decoder-aware 2-opt deferred
     if not state.tokens:
@@ -187,6 +192,7 @@ def run_vehicle_generation(
             capacity,
             priority_weight,
             reuse_penalty,
+            return_fallback_penalty,
         )
         evaluated.append((plan.fitness, individual, plan))
     evaluated.sort(key=lambda item: item[0])
