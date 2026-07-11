@@ -8,8 +8,10 @@ from traveling_salesman_problem.problem.delivery_mesh import (
     delivery_mesh_from_parts,
     delivery_segment_distance,
     delivery_segment_path,
+    effective_transit_count,
     expand_route_polyline,
 )
+from traveling_salesman_problem.problem.vrp_models import DeliveryPoint
 from traveling_salesman_problem.problem.road_network import (
     RoadNetwork,
     build_radius_graph,
@@ -189,6 +191,105 @@ class DeliveryMeshTests(unittest.TestCase):
             self.assertNotIn(blocked_id, mesh.network.nodes)
 
 
+class EffectiveTransitCountTests(unittest.TestCase):
+    def test_single_vehicle_margin_is_plus_ten(self):
+        deliveries = [
+            DeliveryPoint("A", (10.0, 0.0), priority=5, demand=10),
+            DeliveryPoint("B", (20.0, 0.0), priority=7, demand=10),
+        ]
+        effective = effective_transit_count(
+            deliveries,
+            vehicle_count=1,
+            capacity=10,
+            requested_transit=5,
+            maximum_transit=30,
+        )
+        self.assertEqual(effective, 12)
+
+    def test_single_vehicle_requires_more_transit_than_slider_minimum(self):
+        deliveries = [
+            DeliveryPoint("A", (10.0, 0.0), priority=5, demand=12),
+            DeliveryPoint("B", (20.0, 0.0), priority=7, demand=12),
+        ]
+        effective = effective_transit_count(
+            deliveries,
+            vehicle_count=1,
+            capacity=10,
+            requested_transit=5,
+            maximum_transit=20,
+        )
+        self.assertGreater(effective, 5)
+
+    def test_many_vehicles_applies_minimum_margin(self):
+        deliveries = [
+            DeliveryPoint("A", (10.0, 0.0), priority=5, demand=3),
+            DeliveryPoint("B", (20.0, 0.0), priority=7, demand=3),
+        ]
+        effective = effective_transit_count(
+            deliveries,
+            vehicle_count=3,
+            capacity=10,
+            requested_transit=8,
+            maximum_transit=20,
+        )
+        self.assertEqual(effective, 11)
+
+    def test_many_vehicles_respects_requested_transit_when_above_minimum(self):
+        deliveries = [
+            DeliveryPoint("A", (10.0, 0.0), priority=5, demand=3),
+            DeliveryPoint("B", (20.0, 0.0), priority=7, demand=3),
+        ]
+        effective = effective_transit_count(
+            deliveries,
+            vehicle_count=3,
+            capacity=10,
+            requested_transit=15,
+            maximum_transit=20,
+        )
+        self.assertEqual(effective, 15)
+
+    def test_single_vehicle_many_tokens_uses_full_margin(self):
+        deliveries = [
+            DeliveryPoint(f"P{index}", (float(index), 0.0), priority=5, demand=12)
+            for index in range(12)
+        ]
+        effective = effective_transit_count(
+            deliveries,
+            vehicle_count=1,
+            capacity=10,
+            requested_transit=8,
+            maximum_transit=40,
+        )
+        self.assertEqual(effective, 34)
+
+
+class StrictVrpMeshTests(unittest.TestCase):
+    def test_build_vrp_mesh_reachable_with_strict_hub(self):
+        from traveling_salesman_problem.problem.delivery_mesh import (
+            build_vrp_mesh,
+            depot_reaches_all_deliveries,
+        )
+
+        depot = (400.0, 300.0)
+        deliveries = [
+            DeliveryPoint(f"P{i}", (100.0 + i * 40, 200.0), priority=5, demand=5)
+            for i in range(12)
+        ]
+        mesh = build_vrp_mesh(
+            depot,
+            deliveries,
+            map_bounds=(0, 0, 800, 600),
+            transit_count=8,
+            blocked_count=2,
+            rng_seed=7,
+            maximum_transit=20,
+        )
+        self.assertTrue(depot_reaches_all_deliveries(mesh))
+        path = delivery_segment_path(mesh, depot, deliveries[0].coordinate)
+        self.assertGreaterEqual(len(path), 3)
+        self.assertTrue(set(mesh.transit_ids) & set(path))
+
+
 class VrpMeshTests(unittest.TestCase):
     def test_build_vrp_mesh_includes_depot(self):
         from traveling_salesman_problem.problem.delivery_mesh import build_vrp_mesh
@@ -212,14 +313,17 @@ class VrpMeshTests(unittest.TestCase):
         self.assertIn("B", mesh.network.nodes)
         node_count = len(mesh.network.nodes)
         delivery_count = len(mesh.delivery_ids)
+        hub_count = 1 + delivery_count
         self.assertEqual(
             len(mesh.network.edges),
             node_count * (node_count - 1) // 2
-            - delivery_count * (delivery_count - 1) // 2,
+            - hub_count * (hub_count - 1) // 2,
         )
         path = delivery_segment_path(mesh, depot, deliveries[0].coordinate)
         self.assertTrue(path)
         self.assertEqual(path[0], DEPOT_ID)
+        self.assertGreaterEqual(len(path), 3)
+        self.assertTrue(set(mesh.transit_ids) & set(path))
 
 
 if __name__ == "__main__":

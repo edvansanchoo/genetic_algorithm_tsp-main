@@ -22,9 +22,7 @@ class ApplicationSettings:
 
     initial_transit_count: int = 8
     initial_blocked_count: int = 2
-    maximum_mesh_nodes_per_type: int = 20
-    plan_fallback_penalty: float = 20.0
-    plan_last_resort_penalty: float = 1.75
+    maximum_mesh_nodes_per_type: int = 40
 
     initial_vehicle_count: int = 2
     maximum_vehicle_count: int = 5

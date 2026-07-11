@@ -1,4 +1,4 @@
-"""Testes da malha hub: entregas só via trânsito."""
+"""Testes da malha hub estrita: hubs só via trânsito."""
 
 import unittest
 
@@ -15,7 +15,7 @@ from traveling_salesman_problem.problem.vrp_models import DEPOT_ID, DeliveryPoin
 
 
 class DeliveryHubNetworkTests(unittest.TestCase):
-    def test_no_delivery_to_delivery_edges(self) -> None:
+    def test_no_hub_to_hub_edges(self) -> None:
         nodes = {
             DEPOT_ID: (0.0, 0.0),
             "A": (10.0, 0.0),
@@ -25,11 +25,13 @@ class DeliveryHubNetworkTests(unittest.TestCase):
         network = build_delivery_hub_network(nodes, ["A", "B"])
         edge_set = {tuple(sorted(edge)) for edge in network.edges}
         self.assertNotIn(("A", "B"), edge_set)
-        self.assertIn(tuple(sorted((DEPOT_ID, "A"))), edge_set)
+        self.assertNotIn(tuple(sorted((DEPOT_ID, "A"))), edge_set)
+        self.assertNotIn(tuple(sorted((DEPOT_ID, "B"))), edge_set)
         self.assertIn(tuple(sorted(("A", "T1"))), edge_set)
+        self.assertIn(tuple(sorted((DEPOT_ID, "T1"))), edge_set)
         self.assertIn(tuple(sorted(("T1", "B"))), edge_set)
 
-    def test_edge_count_formula(self) -> None:
+    def test_edge_count_formula_strict_hub(self) -> None:
         nodes = {
             DEPOT_ID: (0.0, 0.0),
             "A": (1.0, 0.0),
@@ -37,7 +39,7 @@ class DeliveryHubNetworkTests(unittest.TestCase):
             "T1": (3.0, 0.0),
         }
         network = build_delivery_hub_network(nodes, ["A", "B"])
-        self.assertEqual(len(network.edges), 5)
+        self.assertEqual(len(network.edges), 3)
 
 
 class DeliveryHubPathTests(unittest.TestCase):
@@ -50,10 +52,20 @@ class DeliveryHubPathTests(unittest.TestCase):
         }
         return build_delivery_hub_network(nodes, ["A", "B"])
 
-    def test_depot_to_delivery_direct(self) -> None:
+    def test_depot_to_delivery_uses_transit(self) -> None:
         network = self._hub_network()
         path = find_path(network, DEPOT_ID, "A")
-        self.assertEqual(path, [DEPOT_ID, "A"])
+        self.assertTrue(path)
+        self.assertGreaterEqual(len(path), 3)
+        self.assertIn("T1", path)
+        self.assertEqual(path[0], DEPOT_ID)
+        self.assertEqual(path[-1], "A")
+
+    def test_delivery_to_depot_uses_transit(self) -> None:
+        network = self._hub_network()
+        path = find_path(network, "A", DEPOT_ID)
+        self.assertTrue(path)
+        self.assertIn("T1", path)
 
     def test_delivery_to_delivery_uses_transit_not_depot(self) -> None:
         network = self._hub_network()

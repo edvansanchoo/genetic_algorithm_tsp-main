@@ -8,6 +8,8 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
+from traveling_salesman_problem.problem.vrp_models import DEPOT_ID
+
 Coordinate = Tuple[float, float]
 EdgeKey = Tuple[str, str]
 
@@ -91,12 +93,12 @@ def build_delivery_hub_network(
     nodes: Dict[str, Coordinate],
     delivery_ids: Sequence[str],
 ) -> RoadNetwork:
-    delivery_set = set(delivery_ids)
+    hub_set = {DEPOT_ID, *delivery_ids}
     node_ids = list(nodes.keys())
     edges: List[Tuple[str, str]] = []
     for index, node_a in enumerate(node_ids):
         for node_b in node_ids[index + 1 :]:
-            if node_a in delivery_set and node_b in delivery_set:
+            if node_a in hub_set and node_b in hub_set:
                 continue
             edges.append((node_a, node_b))
     return RoadNetwork(
@@ -182,12 +184,14 @@ def find_path_weighted(
     reuse_penalty: float = 1.0,
     forbidden_edges: Optional[Set[EdgeKey]] = None,
     no_through: Optional[Set[str]] = None,
+    forbidden_nodes: Optional[Set[str]] = None,
 ) -> List[str]:
     """Dijkstra; forbidden_edges are impassable; used_edges cost × reuse_penalty."""
     blocked = blocked or set()
     used_edges = used_edges or set()
     forbidden_edges = forbidden_edges or set()
     no_through = no_through or set()
+    forbidden_nodes = forbidden_nodes or set()
     if origin not in network.nodes or destination not in network.nodes:
         return []
     if origin in blocked or destination in blocked:
@@ -210,6 +214,8 @@ def find_path_weighted(
             if neighbor in blocked:
                 continue
             if neighbor in no_through and neighbor != destination:
+                continue
+            if neighbor in forbidden_nodes and neighbor != destination:
                 continue
             new_cost = cost + edge_cost(
                 network,
