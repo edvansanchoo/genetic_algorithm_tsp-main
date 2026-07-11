@@ -49,6 +49,9 @@ Desktop.ini
 .superpowers/
 obstaculo.txt
 
-# Pygame / local runtime dumps (if any)
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
 *.tmp
 *.bak
