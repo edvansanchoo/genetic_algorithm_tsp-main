@@ -43,6 +43,11 @@ from traveling_salesman_problem.visualization.widgets import (
     MutationSlider,
     ToggleButton,
 )
+from traveling_salesman_problem.web.headless_controls import (
+    HeadlessButton,
+    HeadlessSlider,
+    HeadlessToggle,
+)
 
 POINT_IDS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -389,6 +394,111 @@ class SimulationState:
         self.shuffle_all()
         self._sync_capacity_to_maximum()
 
+    def initialize_headless(self) -> None:
+        self.show_mesh = self.settings.initial_show_mesh
+        self._create_headless_controls()
+        self.shuffle_all()
+        self._sync_capacity_to_maximum()
+
+    def _create_headless_controls(self) -> None:
+        settings = self.settings
+        saved_two_opt = (
+            self.two_opt_toggle.is_active if self.two_opt_toggle is not None else False
+        )
+        saved_show_mesh = (
+            self.mesh_toggle.is_active
+            if self.mesh_toggle is not None
+            else settings.initial_show_mesh
+        )
+        self.mutation_slider = HeadlessSlider(
+            value=settings.initial_mutation_probability,
+            minimum_value=0.0,
+            maximum_value=1.0,
+            label="Taxa de mutação",
+        )
+        self.priority_weight_slider = HeadlessSlider(
+            value=settings.initial_priority_weight,
+            minimum_value=0.0,
+            maximum_value=100.0,
+            label="Peso da prioridade",
+        )
+        self.two_opt_toggle = HeadlessToggle(
+            label="Refinamento 2-opt",
+            is_active=saved_two_opt,
+        )
+        self.mesh_toggle = HeadlessToggle(
+            label="Mostrar malha",
+            is_active=saved_show_mesh,
+        )
+        self.show_mesh = saved_show_mesh
+        self.vehicle_count_slider = HeadlessSlider(
+            value=float(settings.initial_vehicle_count),
+            minimum_value=1.0,
+            maximum_value=float(settings.maximum_vehicle_count),
+            label="Veículos",
+        )
+        self.capacity_slider = HeadlessSlider(
+            value=float(settings.initial_capacity),
+            minimum_value=float(settings.minimum_capacity),
+            maximum_value=float(settings.initial_capacity),
+            label="Capacidade",
+        )
+        self.transit_count_slider = HeadlessSlider(
+            value=float(settings.initial_transit_count),
+            minimum_value=1.0,
+            maximum_value=float(settings.maximum_mesh_nodes_per_type),
+            label="Trânsito",
+        )
+        self.regenerate_positions_button = HeadlessButton(
+            label="Sortear posições",
+            subtitle="Depósito, entregas e malha",
+        )
+        self.hospital_preset_button = HeadlessButton(
+            label="Cenário hospitalar",
+            subtitle="Prioridades críticas fixas",
+        )
+        self.focus_filter_button = HeadlessButton(
+            label=self.focus_filter_label(),
+            subtitle="Cicla Todos → V1 → V2 → … · clique viagem",
+        )
+
+    def restart_vehicle_genetic(self) -> None:
+        if self.mesh is None or self.depot is None:
+            return
+        settings = self.settings
+        capacity = self.capacity_slider.integer_value
+        priority_weight = self.priority_weight
+        for vehicle_id, points in self.assignment.items():
+            tokens = []
+            for point in points:
+                tokens.extend(split_into_tokens(point, capacity))
+            self.vehicle_states[vehicle_id] = initialize_vehicle_genetic(
+                vehicle_id=vehicle_id,
+                tokens=tokens,
+                population_size=settings.population_size,
+                depot=self.depot,
+                mesh=self.mesh,
+                capacity=capacity,
+                priority_weight=priority_weight,
+                blocked_node_penalty=settings.blocked_node_penalty,
+            )
+        self.generation_counter = itertools.count(start=1)
+        self.last_priority_weight = priority_weight
+
+    def clear_all_blocked(self) -> None:
+        if self.mesh is None or self.depot is None or not self.mesh.blocked_ids:
+            return
+        transit_count = len(self.mesh.transit_ids)
+        self.mesh = build_vrp_mesh(
+            self.depot,
+            self.deliveries,
+            self.map_bounds(),
+            transit_count=transit_count,
+            rng_seed=_mesh_rng_seed(self.depot, self.deliveries, transit_count),
+            maximum_transit=self.settings.maximum_mesh_nodes_per_type,
+        )
+        self._rescore_stored_plans_fitness()
+
     def _sync_capacity_to_maximum(self) -> None:
         if self.capacity_slider is None:
             return
@@ -574,7 +684,7 @@ class SimulationState:
             self.shuffle_all()
             return
         if any(
-            slider.is_dragging
+            getattr(slider, "is_dragging", False)
             for slider in (
                 self.mutation_slider,
                 self.priority_weight_slider,
