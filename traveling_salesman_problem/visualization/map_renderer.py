@@ -11,6 +11,7 @@ from traveling_salesman_problem.problem.delivery_mesh import (
     DeliveryMesh,
     delivery_segment_path,
     expand_route_polyline,
+    resolve_node_coordinate,
 )
 from traveling_salesman_problem.problem.vrp_decoder import DecodedVehiclePlan
 from traveling_salesman_problem.problem.vrp_models import DeliveryPoint, Trip
@@ -37,6 +38,8 @@ def draw_transit_nodes(
     if mesh is None:
         return
     for node_id in mesh.transit_ids:
+        if node_id not in mesh.network.nodes:
+            continue
         center = mesh.network.nodes[node_id]
         point = (int(center[0]), int(center[1]))
         pygame.draw.circle(screen, VisualTheme.transit_stroke, point, radius + 1)
@@ -157,7 +160,7 @@ def _trip_polyline(
         )
         if not path:
             continue
-        path_coords = [mesh.network.nodes[node_id] for node_id in path]
+        path_coords = [resolve_node_coordinate(mesh, node_id) for node_id in path]
         if points:
             path_coords = path_coords[1:]
         points.extend(path_coords)
@@ -173,7 +176,7 @@ def _trip_polyline_from_stored(
         return _trip_polyline(mesh, coordinates)
     points: List[CityCoordinate] = []
     for path in trip.path_node_ids:
-        path_coords = [mesh.network.nodes[node_id] for node_id in path]
+        path_coords = [resolve_node_coordinate(mesh, node_id) for node_id in path]
         if points and path_coords:
             path_coords = path_coords[1:]
         points.extend(path_coords)

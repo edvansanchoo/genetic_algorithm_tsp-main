@@ -21,12 +21,13 @@ class ApplicationSettings:
     maximum_terrain_features_per_type: int = 8
 
     initial_transit_count: int = 8
-    initial_blocked_count: int = 2
     maximum_mesh_nodes_per_type: int = 40
+    blocked_node_penalty: float = 500.0
 
-    initial_vehicle_count: int = 2
+    initial_vehicle_count: int = 1
     maximum_vehicle_count: int = 5
     initial_capacity: int = 10
+    initial_show_mesh: bool = False
     minimum_capacity: int = 1
     min_demand: int = 1
     max_demand: int = 12

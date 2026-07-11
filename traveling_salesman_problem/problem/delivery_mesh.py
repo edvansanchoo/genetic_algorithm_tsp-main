@@ -58,13 +58,10 @@ def build_delivery_mesh(
     city_coordinates: Sequence[Coordinate],
     map_bounds: MapBounds,
     transit_count: int,
-    blocked_count: int,
     rng: Optional[random.Random] = None,
     rng_seed: Optional[int] = None,
     max_rebuild_attempts: int = 40,
 ) -> DeliveryMesh:
-    if blocked_count < 1:
-        raise ValueError("blocked_count must be >= 1")
     if not city_coordinates:
         raise ValueError("city_coordinates must not be empty")
 
@@ -80,7 +77,7 @@ def build_delivery_mesh(
         }
 
         extras = generate_transit_nodes(
-            transit_count + blocked_count,
+            transit_count,
             min_x,
             min_y,
             max_x,
@@ -90,21 +87,15 @@ def build_delivery_mesh(
             rng=rng,
             id_prefix="N",
         )
-        transit_nodes = extras[:transit_count]
-        blocked_nodes = extras[transit_count:]
 
         transit_ids: List[str] = []
-        for index, (_raw_id, coordinate) in enumerate(transit_nodes, start=1):
+        for index, (_raw_id, coordinate) in enumerate(extras, start=1):
             node_id = f"T{index}"
             transit_ids.append(node_id)
             nodes[node_id] = coordinate
 
         blocked_ids: Set[str] = set()
         blocked_coordinates: Dict[str, Coordinate] = {}
-        for index, (_raw_id, coordinate) in enumerate(blocked_nodes, start=1):
-            node_id = f"B{index}"
-            blocked_ids.add(node_id)
-            blocked_coordinates[node_id] = coordinate
 
         network = build_delivery_hub_network(nodes, delivery_ids)
         mesh = DeliveryMesh(
@@ -128,15 +119,12 @@ def build_vrp_mesh(
     deliveries: Sequence[DeliveryPoint],
     map_bounds: MapBounds,
     transit_count: int,
-    blocked_count: int,
     rng: Optional[random.Random] = None,
     rng_seed: Optional[int] = None,
     max_rebuild_attempts: int = 40,
     maximum_transit: int = 20,
 ) -> DeliveryMesh:
-    """Malha VRP: depósito + entregas (ids dos pontos) + trânsito; bloqueados só no mapa."""
-    if blocked_count < 1:
-        raise ValueError("blocked_count must be >= 1")
+    """Malha VRP: depósito + entregas (ids dos pontos) + trânsito; bloqueios manuais no mapa."""
     if not deliveries:
         raise ValueError("deliveries must not be empty")
 
@@ -158,7 +146,7 @@ def build_vrp_mesh(
                 nodes[point.id] = coordinate
 
             extras = generate_transit_nodes(
-                current_transit + blocked_count,
+                current_transit,
                 min_x,
                 min_y,
                 max_x,
@@ -168,21 +156,15 @@ def build_vrp_mesh(
                 rng=rng,
                 id_prefix="N",
             )
-            transit_nodes = extras[:current_transit]
-            blocked_nodes = extras[current_transit:]
 
             transit_ids: List[str] = []
-            for index, (_raw_id, coordinate) in enumerate(transit_nodes, start=1):
+            for index, (_raw_id, coordinate) in enumerate(extras, start=1):
                 node_id = f"T{index}"
                 transit_ids.append(node_id)
                 nodes[node_id] = coordinate
 
             blocked_ids: Set[str] = set()
             blocked_coordinates: Dict[str, Coordinate] = {}
-            for index, (_raw_id, coordinate) in enumerate(blocked_nodes, start=1):
-                node_id = f"B{index}"
-                blocked_ids.add(node_id)
-                blocked_coordinates[node_id] = coordinate
 
             network = build_delivery_hub_network(nodes, delivery_ids)
             mesh = DeliveryMesh(
@@ -231,6 +213,87 @@ def delivery_mesh_from_parts(
             coordinate: node_id for node_id, coordinate in network.nodes.items()
         },
     )
+
+
+def resolve_node_coordinate(mesh: DeliveryMesh, node_id: str) -> Coordinate:
+    if node_id in mesh.network.nodes:
+        return mesh.network.nodes[node_id]
+    if node_id in mesh.blocked_coordinates:
+        return mesh.blocked_coordinates[node_id]
+    raise KeyError(f"Unknown node id: {node_id}")
+
+
+def rebuild_mesh_network(
+    mesh: DeliveryMesh,
+    delivery_ids: Sequence[str],
+) -> DeliveryMesh:
+    active_nodes = dict(mesh.network.nodes)
+    network = build_delivery_hub_network(active_nodes, delivery_ids)
+    hub_ids = {DEPOT_ID, *delivery_ids}
+    return DeliveryMesh(
+        network=network,
+        delivery_ids=list(mesh.delivery_ids),
+        transit_ids=list(mesh.transit_ids),
+        blocked_ids=set(mesh.blocked_ids),
+        blocked_coordinates=dict(mesh.blocked_coordinates),
+        coordinate_to_id={
+            network.nodes[node_id]: node_id
+            for node_id in network.nodes
+            if node_id in hub_ids
+        },
+    )
+
+
+def toggle_node_blocked(
+    mesh: DeliveryMesh,
+    node_id: str,
+    delivery_ids: Sequence[str],
+) -> DeliveryMesh:
+    if node_id in mesh.blocked_ids:
+        coordinate = mesh.blocked_coordinates[node_id]
+        blocked_ids = set(mesh.blocked_ids)
+        blocked_coordinates = dict(mesh.blocked_coordinates)
+        blocked_ids.remove(node_id)
+        del blocked_coordinates[node_id]
+        active_nodes = dict(mesh.network.nodes)
+        active_nodes[node_id] = coordinate
+        interim = DeliveryMesh(
+            network=RoadNetwork(
+                nodes=active_nodes,
+                edges=mesh.network.edges,
+                connection_radius=mesh.network.connection_radius,
+            ),
+            delivery_ids=list(mesh.delivery_ids),
+            transit_ids=list(mesh.transit_ids),
+            blocked_ids=blocked_ids,
+            blocked_coordinates=blocked_coordinates,
+            coordinate_to_id=dict(mesh.coordinate_to_id),
+        )
+        return rebuild_mesh_network(interim, delivery_ids)
+
+    if node_id not in mesh.network.nodes:
+        raise KeyError(f"Cannot block unknown active node: {node_id}")
+
+    coordinate = mesh.network.nodes[node_id]
+    active_nodes = dict(mesh.network.nodes)
+    del active_nodes[node_id]
+    blocked_ids = set(mesh.blocked_ids)
+    blocked_coordinates = dict(mesh.blocked_coordinates)
+    blocked_ids.add(node_id)
+    blocked_coordinates[node_id] = coordinate
+    interim = DeliveryMesh(
+        network=RoadNetwork(
+            nodes=active_nodes,
+            edges=[],
+            connection_radius=mesh.network.connection_radius,
+        ),
+        delivery_ids=list(mesh.delivery_ids),
+        transit_ids=list(mesh.transit_ids),
+        blocked_ids=blocked_ids,
+        blocked_coordinates=blocked_coordinates,
+        coordinate_to_id=dict(mesh.coordinate_to_id),
+    )
+    return rebuild_mesh_network(interim, delivery_ids)
 
 
 def _id_for_coordinate(mesh: DeliveryMesh, coordinate: Coordinate) -> str:
@@ -336,7 +399,7 @@ def expand_route_polyline(
         path = delivery_segment_path(mesh, origin, destination)
         if not path:
             return []
-        path_coords = [mesh.network.nodes[node_id] for node_id in path]
+        path_coords = [resolve_node_coordinate(mesh, node_id) for node_id in path]
         if points:
             path_coords = path_coords[1:]
         points.extend(path_coords)

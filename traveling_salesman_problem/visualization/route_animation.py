@@ -8,6 +8,7 @@ from typing import List
 from traveling_salesman_problem.problem.delivery_mesh import (
     DeliveryMesh,
     delivery_segment_path,
+    resolve_node_coordinate,
 )
 from traveling_salesman_problem.problem.road_network import Coordinate
 from traveling_salesman_problem.problem.vrp_decoder import DecodedVehiclePlan
@@ -21,7 +22,9 @@ def build_animation_polyline(
     for trip in plan.trips:
         if trip.path_node_ids:
             for path in trip.path_node_ids:
-                path_coords = [mesh.network.nodes[node_id] for node_id in path]
+                path_coords = [
+                    resolve_node_coordinate(mesh, node_id) for node_id in path
+                ]
                 if points and path_coords:
                     path_coords = path_coords[1:]
                 points.extend(path_coords)
@@ -35,7 +38,9 @@ def build_animation_polyline(
             )
             if not path:
                 continue
-            path_coords = [mesh.network.nodes[node_id] for node_id in path]
+            path_coords = [
+                resolve_node_coordinate(mesh, node_id) for node_id in path
+            ]
             if points:
                 path_coords = path_coords[1:]
             points.extend(path_coords)

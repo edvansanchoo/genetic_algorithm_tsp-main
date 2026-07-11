@@ -86,7 +86,6 @@ def _draw_scrollable_sidebar(
         "Malha no mapa",
     )
     simulation.transit_count_slider.draw(content_surface)
-    simulation.blocked_count_slider.draw(content_surface)
 
     draw_section_header(
         content_surface,
@@ -158,7 +157,6 @@ def run_application(settings=None) -> None:
                 saved_vehicles = simulation.vehicle_count_slider.integer_value
                 saved_capacity = simulation.capacity_slider.integer_value
                 saved_transit = simulation.transit_count_slider.integer_value
-                saved_blocked = simulation.blocked_count_slider.integer_value
                 saved_two_opt = simulation.two_opt_toggle.is_active
                 saved_show_mesh = simulation.mesh_toggle.is_active
                 saved_focus = simulation.focus_vehicle_id
@@ -172,7 +170,6 @@ def run_application(settings=None) -> None:
                 simulation.vehicle_count_slider.value = float(saved_vehicles)
                 simulation.capacity_slider.value = float(saved_capacity)
                 simulation.transit_count_slider.value = float(saved_transit)
-                simulation.blocked_count_slider.value = float(max(1, saved_blocked))
                 simulation.two_opt_toggle.is_active = saved_two_opt
                 simulation.mesh_toggle.is_active = saved_show_mesh
                 simulation.show_mesh = saved_show_mesh
@@ -201,8 +198,12 @@ def run_application(settings=None) -> None:
                         )
                 else:
                     simulation.handle_control_events(event)
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if sidebar_scroll.is_mouse_in_viewport(event.pos):
+                    simulation.handle_control_events(sidebar_scroll.translate_event(event))
+                elif event.pos[0] >= settings.plot_horizontal_offset:
+                    simulation.toggle_blocked_at(event.pos)
             elif event.type in (
-                pygame.MOUSEBUTTONDOWN,
                 pygame.MOUSEBUTTONUP,
                 pygame.MOUSEMOTION,
             ):
@@ -284,13 +285,13 @@ def run_application(settings=None) -> None:
             dim_others=True,
             draw_arrows=True,
         )
-        draw_blocked_nodes(screen, simulation.mesh)
         draw_delivery_points(
             screen,
             simulation.deliveries,
             settings.city_node_radius,
         )
         draw_depot(screen, simulation.depot)
+        draw_blocked_nodes(screen, simulation.mesh)
 
         if focus_id is not None and focus_id in plans and simulation.mesh is not None:
             polyline = build_animation_polyline(simulation.mesh, plans[focus_id])

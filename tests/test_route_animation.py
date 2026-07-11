@@ -2,7 +2,10 @@
 
 import unittest
 
-from traveling_salesman_problem.problem.delivery_mesh import delivery_mesh_from_parts
+from traveling_salesman_problem.problem.delivery_mesh import (
+    delivery_mesh_from_parts,
+    toggle_node_blocked,
+)
 from traveling_salesman_problem.problem.road_network import RoadNetwork
 from traveling_salesman_problem.problem.vrp_decoder import DecodedVehiclePlan
 from traveling_salesman_problem.problem.vrp_models import DEPOT_ID, Trip, TripStop
@@ -53,6 +56,16 @@ class RouteAnimationTests(unittest.TestCase):
         self.assertEqual(point_along_polyline(points, 0.0), (0.0, 0.0))
         end = point_along_polyline(points, 0.999)
         self.assertAlmostEqual(end[0], 0.0, places=1)
+
+    def test_polyline_resolves_blocked_delivery_on_stored_path(self):
+        blocked_mesh = toggle_node_blocked(
+            self.mesh,
+            "A",
+            [DEPOT_ID, *self.mesh.delivery_ids],
+        )
+        points = build_animation_polyline(blocked_mesh, self.plan)
+        self.assertGreaterEqual(len(points), 2)
+        self.assertEqual(points[0], self.depot)
 
 
 if __name__ == "__main__":

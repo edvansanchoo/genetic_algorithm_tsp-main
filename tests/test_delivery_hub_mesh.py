@@ -93,7 +93,6 @@ class VrpHubMeshIntegrationTests(unittest.TestCase):
             deliveries,
             map_bounds=(-10, -10, 60, 60),
             transit_count=2,
-            blocked_count=1,
             rng_seed=11,
         )
         path = delivery_segment_path(

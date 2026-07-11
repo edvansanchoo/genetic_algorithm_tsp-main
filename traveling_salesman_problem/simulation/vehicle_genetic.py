@@ -67,6 +67,7 @@ def _sample_drawable_permutation(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float,
+    blocked_node_penalty: float = 500.0,
     max_attempts: int = 400,
 ) -> Optional[Tuple[TokenRoute, DecodedVehiclePlan]]:
     if not tokens:
@@ -81,6 +82,7 @@ def _sample_drawable_permutation(
             mesh,
             capacity,
             priority_weight,
+            blocked_node_penalty,
         )
         if plan_has_drawable_trips(plan):
             return permutation, plan
@@ -164,6 +166,7 @@ def _evaluate(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float,
+    blocked_node_penalty: float = 500.0,
 ) -> DecodedVehiclePlan:
     return decode_vehicle_permutation(
         tokens,
@@ -172,6 +175,7 @@ def _evaluate(
         mesh,
         capacity,
         priority_weight,
+        blocked_node_penalty,
     )
 
 
@@ -183,6 +187,7 @@ def initialize_vehicle_genetic(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float,
+    blocked_node_penalty: float = 500.0,
 ) -> VehicleGeneticState:
     if not tokens:
         empty = VehicleGeneticState(
@@ -203,6 +208,7 @@ def initialize_vehicle_genetic(
         mesh,
         capacity,
         priority_weight,
+        blocked_node_penalty,
     )
     if drawable_seed is not None:
         population.append(list(drawable_seed[0]))
@@ -221,6 +227,7 @@ def initialize_vehicle_genetic(
             mesh,
             capacity,
             priority_weight,
+            blocked_node_penalty,
         )
         evaluated.append((plan.fitness, individual, plan))
     evaluated.sort(key=lambda item: item[0])
@@ -248,6 +255,7 @@ def run_vehicle_generation(
     mutation_probability: float,
     use_2opt: bool = False,
     n_elite: int = 2,
+    blocked_node_penalty: float = 500.0,
 ) -> VehicleGeneticState:
     del use_2opt  # reserved; decoder-aware 2-opt deferred
     if not state.tokens:
@@ -263,6 +271,7 @@ def run_vehicle_generation(
             mesh,
             capacity,
             priority_weight,
+            blocked_node_penalty,
         )
         evaluated.append((plan.fitness, individual, plan))
     evaluated.sort(key=lambda item: item[0])

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Sequence, Set, Tuple
 
 from traveling_salesman_problem.problem.delivery_mesh import (
     DeliveryMesh,
@@ -78,6 +78,44 @@ def _segment_with_plan_memory(
     return cost, path
 
 
+def path_blocked_crossing_penalty(
+    mesh: DeliveryMesh,
+    path: Sequence[str],
+    penalty_per_node: float,
+) -> float:
+    return penalty_per_node * sum(
+        1 for node_id in path if node_id in mesh.blocked_ids
+    )
+
+
+def plan_blocked_crossing_penalty(
+    mesh: DeliveryMesh,
+    plan: DecodedVehiclePlan,
+    penalty_per_node: float,
+) -> float:
+    total = 0.0
+    for trip in plan.trips:
+        for path in trip.path_node_ids:
+            total += path_blocked_crossing_penalty(mesh, path, penalty_per_node)
+    return total
+
+
+def plan_fitness_with_blocked_penalty(
+    plan: DecodedVehiclePlan,
+    mesh: DeliveryMesh,
+    priority_weight: float,
+    penalty_per_node: float,
+) -> float:
+    if plan.fitness == float("inf"):
+        return float("inf")
+    blocked_penalty = plan_blocked_crossing_penalty(mesh, plan, penalty_per_node)
+    return (
+        plan.total_distance
+        + priority_weight * plan.priority_penalty
+        + blocked_penalty
+    )
+
+
 def decode_vehicle_permutation(
     tokens: List[DeliveryToken],
     permutation: List[DeliveryToken],
@@ -85,6 +123,7 @@ def decode_vehicle_permutation(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float = 0.0,
+    blocked_node_penalty: float = 500.0,
 ) -> DecodedVehiclePlan:
     if capacity < 1:
         return _invalid_plan()
@@ -190,10 +229,15 @@ def decode_vehicle_permutation(
         return failure
 
     total_distance = sum(trip.distance for trip in trips)
-    fitness = total_distance + priority_weight * priority_penalty
-    return DecodedVehiclePlan(
+    plan = DecodedVehiclePlan(
         trips=trips,
         total_distance=total_distance,
         priority_penalty=priority_penalty,
-        fitness=fitness,
+        fitness=0.0,
     )
+    plan.fitness = (
+        total_distance
+        + priority_weight * priority_penalty
+        + plan_blocked_crossing_penalty(mesh, plan, blocked_node_penalty)
+    )
+    return plan

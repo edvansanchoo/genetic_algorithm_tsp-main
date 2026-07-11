@@ -2,9 +2,16 @@
 
 import unittest
 
-from traveling_salesman_problem.problem.delivery_mesh import delivery_mesh_from_parts
+from traveling_salesman_problem.problem.delivery_mesh import (
+    delivery_mesh_from_parts,
+    toggle_node_blocked,
+)
 from traveling_salesman_problem.problem.road_network import RoadNetwork
-from traveling_salesman_problem.problem.vrp_decoder import decode_vehicle_permutation
+from traveling_salesman_problem.problem.vrp_decoder import (
+    decode_vehicle_permutation,
+    plan_blocked_crossing_penalty,
+    plan_fitness_with_blocked_penalty,
+)
 from traveling_salesman_problem.problem.vrp_models import DEPOT_ID, DeliveryToken
 
 
@@ -124,6 +131,36 @@ class VrpDecoderTests(unittest.TestCase):
             capacity=20,
         )
         self.assertEqual(plan.fitness, float("inf"))
+
+    def test_stored_path_crossing_blocked_node_adds_penalty(self):
+        plan = decode_vehicle_permutation(
+            self.tokens,
+            list(self.tokens),
+            self.depot,
+            self.mesh,
+            capacity=20,
+        )
+        transit_on_path = next(
+            node_id
+            for trip in plan.trips
+            for path in trip.path_node_ids
+            for node_id in path
+            if node_id in self.mesh.transit_ids
+        )
+        blocked_mesh = toggle_node_blocked(
+            self.mesh,
+            transit_on_path,
+            [DEPOT_ID, *self.mesh.delivery_ids],
+        )
+        penalty = plan_blocked_crossing_penalty(blocked_mesh, plan, 500.0)
+        self.assertGreater(penalty, 0.0)
+        adjusted = plan_fitness_with_blocked_penalty(
+            plan,
+            blocked_mesh,
+            priority_weight=0.0,
+            penalty_per_node=500.0,
+        )
+        self.assertAlmostEqual(adjusted, plan.total_distance + penalty)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from traveling_salesman_problem.problem.delivery_mesh import (
     DeliveryMesh,
     build_vrp_mesh,
     effective_transit_count,
+    toggle_node_blocked,
 )
 from traveling_salesman_problem.problem.priority_presets import apply_hospital_priority_preset
 from traveling_salesman_problem.problem.vrp_assignment import (
@@ -27,13 +28,15 @@ from traveling_salesman_problem.problem.vrp_assignment import (
     split_into_tokens,
     total_delivery_demand,
 )
-from traveling_salesman_problem.problem.vrp_models import Coordinate, DeliveryPoint
+from traveling_salesman_problem.problem.vrp_decoder import plan_fitness_with_blocked_penalty
+from traveling_salesman_problem.problem.vrp_models import DEPOT_ID, Coordinate, DeliveryPoint
 from traveling_salesman_problem.simulation.vehicle_genetic import (
     VehicleGeneticState,
     initialize_vehicle_genetic,
     plan_has_drawable_trips,
     run_vehicle_generation,
 )
+from traveling_salesman_problem.visualization.map_hit_test import hit_test_map_node
 from traveling_salesman_problem.visualization.widgets import (
     ActionButton,
     IntegerSlider,
@@ -48,12 +51,11 @@ def _mesh_rng_seed(
     depot: Coordinate,
     deliveries: List[DeliveryPoint],
     transit_count: int,
-    blocked_count: int,
 ) -> int:
     parts = [depot]
     for point in sorted(deliveries, key=lambda item: item.id):
         parts.append((point.id, point.coordinate))
-    parts.extend([transit_count, blocked_count])
+    parts.append(transit_count)
     digest = md5(repr(parts).encode("utf-8")).hexdigest()
     return int(digest[:8], 16)
 
@@ -77,7 +79,6 @@ class SimulationState:
     vehicle_count_slider: Optional[IntegerSlider] = None
     capacity_slider: Optional[IntegerSlider] = None
     transit_count_slider: Optional[IntegerSlider] = None
-    blocked_count_slider: Optional[IntegerSlider] = None
     regenerate_positions_button: Optional[ActionButton] = None
     hospital_preset_button: Optional[ActionButton] = None
     focus_filter_button: Optional[ActionButton] = None
@@ -85,13 +86,12 @@ class SimulationState:
     mesh_toggle: Optional[ToggleButton] = None
 
     focus_vehicle_id: Optional[int] = None
-    show_mesh: bool = True
+    show_mesh: bool = False
 
     last_vehicle_count: int = 0
     last_capacity: int = 0
     last_transit_count: int = 0
     last_effective_transit_count: int = 0
-    last_blocked_count: int = 0
     last_priority_weight: float = -1.0
 
     section_algorithm_y: int = 0
@@ -211,12 +211,6 @@ class SimulationState:
             if self.transit_count_slider is not None
             else settings.initial_transit_count,
         )
-        blocked_count = max(
-            1,
-            self.blocked_count_slider.integer_value
-            if self.blocked_count_slider is not None
-            else settings.initial_blocked_count,
-        )
 
         if self.depot is None or not self.deliveries:
             self.depot = self._random_map_point()
@@ -235,12 +229,10 @@ class SimulationState:
             self.deliveries,
             self.map_bounds(),
             transit_count=transit_count,
-            blocked_count=blocked_count,
             rng_seed=_mesh_rng_seed(
                 self.depot,
                 self.deliveries,
                 transit_count,
-                blocked_count,
             ),
             maximum_transit=settings.maximum_mesh_nodes_per_type,
         )
@@ -262,6 +254,7 @@ class SimulationState:
                 mesh=self.mesh,
                 capacity=capacity,
                 priority_weight=self.priority_weight if self.priority_weight_slider else 0.0,
+                blocked_node_penalty=settings.blocked_node_penalty,
             )
 
         self.generation_counter = itertools.count(start=1)
@@ -269,7 +262,6 @@ class SimulationState:
         self.last_capacity = capacity
         self.last_transit_count = requested_transit
         self.last_effective_transit_count = transit_count
-        self.last_blocked_count = blocked_count
         self._sync_capacity_slider_bounds()
         if self.capacity_slider is not None:
             self.last_capacity = self.capacity_slider.integer_value
@@ -287,6 +279,53 @@ class SimulationState:
         self.capacity_slider.maximum_value = float(maximum)
         if self.capacity_slider.integer_value > maximum:
             self.capacity_slider.value = float(maximum)
+
+    def toggle_blocked_at(self, screen_pos: tuple[int, int]) -> bool:
+        if self.mesh is None or self.depot is None:
+            return False
+        settings = self.settings
+        hit_radius = float(settings.city_node_radius + 6)
+        node_id = hit_test_map_node(
+            self.mesh,
+            self.depot,
+            self.deliveries,
+            screen_pos,
+            hit_radius,
+        )
+        if node_id is None:
+            return False
+        self.mesh = toggle_node_blocked(
+            self.mesh,
+            node_id,
+            [DEPOT_ID, *self.mesh.delivery_ids],
+        )
+        self._rescore_stored_plans_fitness()
+        return True
+
+    def _rescore_stored_plans_fitness(self) -> None:
+        if self.mesh is None:
+            return
+        penalty = self.settings.blocked_node_penalty
+        priority_weight = self.priority_weight
+        for state in self.vehicle_states.values():
+            if state.best_plan is not None and plan_has_drawable_trips(state.best_plan):
+                state.best_fitness = plan_fitness_with_blocked_penalty(
+                    state.best_plan,
+                    self.mesh,
+                    priority_weight,
+                    penalty,
+                )
+                state.best_plan.fitness = state.best_fitness
+            if (
+                state.runner_up_plan is not None
+                and plan_has_drawable_trips(state.runner_up_plan)
+            ):
+                state.runner_up_plan.fitness = plan_fitness_with_blocked_penalty(
+                    state.runner_up_plan,
+                    self.mesh,
+                    priority_weight,
+                    penalty,
+                )
 
     def shuffle_all(self) -> None:
         self.depot = None
@@ -309,8 +348,18 @@ class SimulationState:
         self.rebuild_scenario()
 
     def initialize(self) -> None:
+        self.show_mesh = self.settings.initial_show_mesh
         self._create_control_widgets()
         self.shuffle_all()
+        self._sync_capacity_to_maximum()
+
+    def _sync_capacity_to_maximum(self) -> None:
+        if self.capacity_slider is None:
+            return
+        maximum = self.capacity_slider.maximum_value
+        if self.capacity_slider.value != maximum:
+            self.capacity_slider.value = maximum
+            self.rebuild_scenario()
 
     def _create_control_widgets(self) -> None:
         settings = self.settings
@@ -320,7 +369,9 @@ class SimulationState:
             self.two_opt_toggle.is_active if self.two_opt_toggle is not None else False
         )
         saved_show_mesh = (
-            self.mesh_toggle.is_active if self.mesh_toggle is not None else self.show_mesh
+            self.mesh_toggle.is_active
+            if self.mesh_toggle is not None
+            else self.settings.initial_show_mesh
         )
 
         self.section_algorithm_y = 0
@@ -400,22 +451,12 @@ class SimulationState:
         self.transit_count_slider = IntegerSlider(
             position_x=VisualTheme.control_margin,
             position_y=mesh_y,
-            width=half_width,
+            width=controls_width,
             height=settings.count_slider_height,
             value=settings.initial_transit_count,
             minimum_value=1,
             maximum_value=settings.maximum_mesh_nodes_per_type,
             label="Trânsito",
-        )
-        self.blocked_count_slider = IntegerSlider(
-            position_x=VisualTheme.control_margin + half_width + VisualTheme.control_gap,
-            position_y=mesh_y,
-            width=half_width,
-            height=settings.count_slider_height,
-            value=max(1, settings.initial_blocked_count),
-            minimum_value=1,
-            maximum_value=settings.maximum_mesh_nodes_per_type,
-            label="Bloqueados",
         )
         self.regenerate_positions_button = ActionButton(
             position_x=VisualTheme.control_margin,
@@ -450,7 +491,6 @@ class SimulationState:
         self.vehicle_count_slider.handle_event(event)
         self.capacity_slider.handle_event(event)
         self.transit_count_slider.handle_event(event)
-        self.blocked_count_slider.handle_event(event)
         self.regenerate_positions_button.handle_event(event)
         self.hospital_preset_button.handle_event(event)
         self.focus_filter_button.handle_event(event)
@@ -476,6 +516,7 @@ class SimulationState:
                 self.mesh,
                 capacity,
                 priority_weight,
+                self.settings.blocked_node_penalty,
             )
             if plan_has_drawable_trips(plan):
                 state.best_plan = plan
@@ -504,7 +545,6 @@ class SimulationState:
                 self.vehicle_count_slider,
                 self.capacity_slider,
                 self.transit_count_slider,
-                self.blocked_count_slider,
             )
         ):
             return
@@ -512,7 +552,6 @@ class SimulationState:
         vehicle_count = self.vehicle_count_slider.integer_value
         capacity = self.capacity_slider.integer_value
         requested_transit = max(1, self.transit_count_slider.integer_value)
-        blocked_count = self.blocked_count_slider.integer_value
         effective_transit = (
             effective_transit_count(
                 self.deliveries,
@@ -529,7 +568,6 @@ class SimulationState:
             or capacity != self.last_capacity
             or requested_transit != self.last_transit_count
             or effective_transit != self.last_effective_transit_count
-            or blocked_count != self.last_blocked_count
         ):
             self.rebuild_scenario()
 
@@ -550,6 +588,7 @@ class SimulationState:
                 priority_weight=priority_weight,
                 mutation_probability=mutation_probability,
                 use_2opt=self.two_opt_toggle.is_active,
+                blocked_node_penalty=self.settings.blocked_node_penalty,
             )
 
         generation_number = next(self.generation_counter)

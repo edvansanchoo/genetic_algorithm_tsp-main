@@ -10,6 +10,8 @@ from traveling_salesman_problem.problem.delivery_mesh import (
     delivery_segment_path,
     effective_transit_count,
     expand_route_polyline,
+    resolve_node_coordinate,
+    toggle_node_blocked,
 )
 from traveling_salesman_problem.problem.vrp_models import DeliveryPoint
 from traveling_salesman_problem.problem.road_network import (
@@ -85,9 +87,10 @@ class DeliveryMeshTests(unittest.TestCase):
             cities,
             map_bounds=(-20, -20, 120, 120),
             transit_count=4,
-            blocked_count=1,
             rng_seed=1,
         )
+        transit_id = mesh.transit_ids[0]
+        mesh = toggle_node_blocked(mesh, transit_id, mesh.delivery_ids)
         path = delivery_segment_path(mesh, cities[0], cities[1])
         self.assertTrue(path)
         for blocked_id in mesh.blocked_ids:
@@ -161,7 +164,6 @@ class DeliveryMeshTests(unittest.TestCase):
             cities,
             map_bounds=(-20, -20, 120, 120),
             transit_count=4,
-            blocked_count=1,
             rng_seed=1,
         )
         node_count = len(mesh.network.nodes)
@@ -179,14 +181,15 @@ class DeliveryMeshTests(unittest.TestCase):
         self.assertEqual(delivery_edge_set, set())
 
     def test_blocked_not_in_network_nodes(self):
-        cities = [(0.0, 0.0), (100.0, 0.0)]
+        cities = [(0.0, 0.0), (50.0, 50.0), (100.0, 0.0)]
         mesh = build_delivery_mesh(
             cities,
             map_bounds=(-20, -20, 120, 120),
-            transit_count=2,
-            blocked_count=2,
+            transit_count=6,
             rng_seed=3,
         )
+        for transit_id in mesh.transit_ids[:2]:
+            mesh = toggle_node_blocked(mesh, transit_id, mesh.delivery_ids)
         for blocked_id in mesh.blocked_ids:
             self.assertNotIn(blocked_id, mesh.network.nodes)
 
@@ -280,7 +283,6 @@ class StrictVrpMeshTests(unittest.TestCase):
             deliveries,
             map_bounds=(0, 0, 800, 600),
             transit_count=8,
-            blocked_count=2,
             rng_seed=7,
             maximum_transit=20,
         )
@@ -305,7 +307,6 @@ class VrpMeshTests(unittest.TestCase):
             deliveries,
             map_bounds=(-10, -10, 60, 60),
             transit_count=3,
-            blocked_count=1,
             rng_seed=11,
         )
         self.assertIn(DEPOT_ID, mesh.network.nodes)
@@ -324,6 +325,69 @@ class VrpMeshTests(unittest.TestCase):
         self.assertEqual(path[0], DEPOT_ID)
         self.assertGreaterEqual(len(path), 3)
         self.assertTrue(set(mesh.transit_ids) & set(path))
+
+
+class ManualBlockedNodeTests(unittest.TestCase):
+    def _sample_mesh(self):
+        cities = [(0.0, 0.0), (100.0, 0.0)]
+        return build_delivery_mesh(
+            cities,
+            map_bounds=(-20, -20, 120, 120),
+            transit_count=4,
+            rng_seed=1,
+        )
+
+    def test_toggle_block_removes_transit_from_network(self):
+        mesh = self._sample_mesh()
+        transit_id = mesh.transit_ids[0]
+        original_coord = mesh.network.nodes[transit_id]
+
+        updated = toggle_node_blocked(mesh, transit_id, mesh.delivery_ids)
+
+        self.assertIn(transit_id, updated.blocked_ids)
+        self.assertEqual(updated.blocked_coordinates[transit_id], original_coord)
+        self.assertNotIn(transit_id, updated.network.nodes)
+
+    def test_toggle_unblock_restores_transit_to_network(self):
+        mesh = self._sample_mesh()
+        transit_id = mesh.transit_ids[0]
+        blocked = toggle_node_blocked(mesh, transit_id, mesh.delivery_ids)
+        restored = toggle_node_blocked(blocked, transit_id, mesh.delivery_ids)
+
+        self.assertNotIn(transit_id, restored.blocked_ids)
+        self.assertIn(transit_id, restored.network.nodes)
+
+    def test_resolve_coordinate_for_blocked_node(self):
+        mesh = self._sample_mesh()
+        transit_id = mesh.transit_ids[0]
+        original_coord = mesh.network.nodes[transit_id]
+        blocked = toggle_node_blocked(mesh, transit_id, mesh.delivery_ids)
+
+        self.assertEqual(
+            resolve_node_coordinate(blocked, transit_id),
+            original_coord,
+        )
+
+    def test_blocked_transit_not_on_new_path(self):
+        mesh = self._sample_mesh()
+        cities = [(0.0, 0.0), (100.0, 0.0)]
+        transit_id = mesh.transit_ids[0]
+        blocked = toggle_node_blocked(mesh, transit_id, mesh.delivery_ids)
+        path = delivery_segment_path(blocked, cities[0], cities[1])
+
+        self.assertTrue(path)
+        self.assertNotIn(transit_id, path)
+
+    def test_stored_path_resolves_blocked_transit_coordinate(self):
+        mesh = self._sample_mesh()
+        cities = [(0.0, 0.0), (100.0, 0.0)]
+        path = delivery_segment_path(mesh, cities[0], cities[1])
+        self.assertTrue(path)
+        transit_in_path = next(node for node in path if node.startswith("T"))
+        original = mesh.network.nodes[transit_in_path]
+        blocked = toggle_node_blocked(mesh, transit_in_path, mesh.delivery_ids)
+        resolved = resolve_node_coordinate(blocked, transit_in_path)
+        self.assertEqual(resolved, original)
 
 
 if __name__ == "__main__":
