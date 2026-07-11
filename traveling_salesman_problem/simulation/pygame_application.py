@@ -24,6 +24,7 @@ from traveling_salesman_problem.visualization.map_renderer import (
     draw_mesh_edges,
     draw_transit_nodes,
     draw_vehicle_plans,
+    draw_runner_up_plan,
 )
 from traveling_salesman_problem.visualization.route_animation import (
     build_animation_polyline,
@@ -220,6 +221,7 @@ def run_application(settings=None) -> None:
             best_distance,
             best_weighted_priority,
             plans,
+            runner_up_plans,
             histories,
         ) = simulation.run_one_generation()
 
@@ -262,9 +264,17 @@ def run_application(settings=None) -> None:
         sidebar_scroll.blit_to_screen(screen)
         draw_sidebar_footer(screen, settings.sidebar_footer_y)
 
+        draw_transit_nodes(screen, simulation.mesh)
         if simulation.show_mesh:
             draw_mesh_edges(screen, simulation.mesh)
-            draw_transit_nodes(screen, simulation.mesh)
+
+        focus_id = simulation.focus_vehicle_id
+        if focus_id is not None and focus_id in runner_up_plans:
+            draw_runner_up_plan(
+                screen,
+                simulation.mesh,
+                runner_up_plans[focus_id],
+            )
 
         draw_vehicle_plans(
             screen,
@@ -282,7 +292,6 @@ def run_application(settings=None) -> None:
         )
         draw_depot(screen, simulation.depot)
 
-        focus_id = simulation.focus_vehicle_id
         if focus_id is not None and focus_id in plans and simulation.mesh is not None:
             polyline = build_animation_polyline(simulation.mesh, plans[focus_id])
             if len(polyline) >= 2:

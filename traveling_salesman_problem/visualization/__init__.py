@@ -12,6 +12,7 @@ from traveling_salesman_problem.visualization.map_renderer import (
     draw_depot,
     draw_mesh_edges,
     draw_route_paths,
+    draw_runner_up_plan,
     draw_transit_nodes,
     draw_vehicle_plans,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "draw_map_legend",
     "draw_mesh_edges",
     "draw_route_paths",
+    "draw_runner_up_plan",
     "draw_section_header",
     "draw_sidebar_footer",
     "draw_transit_nodes",

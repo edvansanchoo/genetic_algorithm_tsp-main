@@ -300,6 +300,23 @@ def draw_vehicle_plans(
                 draw_polyline_arrows(screen, points, color, emphasize_indices=emphasize)
 
 
+def draw_runner_up_plan(
+    screen: pygame.Surface,
+    mesh: Optional[DeliveryMesh],
+    plan: DecodedVehiclePlan,
+    color: Tuple[int, int, int] = VisualTheme.route_second_best,
+) -> None:
+    if mesh is None:
+        return
+    for trip in plan.trips:
+        if len(trip.stops) < 2:
+            continue
+        points = _trip_polyline_from_stored(mesh, trip)
+        if len(points) < 2:
+            continue
+        _draw_dashed_polyline(screen, points, color, width=1)
+
+
 def draw_route_paths(
     screen: pygame.Surface,
     route: Route,

@@ -224,6 +224,7 @@ def draw_map_legend(
     legend_items = [
         (VisualTheme.depot_fill, "Depósito"),
         (VisualTheme.route_best, "Rota veículo"),
+        (VisualTheme.route_second_best, "2ª melhor (foco)"),
         (VisualTheme.transit_fill, "Nó de trânsito"),
         (VisualTheme.blocked_fill, "Nó bloqueado"),
         (VisualTheme.mesh_edge, "Aresta da malha"),
