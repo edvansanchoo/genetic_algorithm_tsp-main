@@ -273,12 +273,17 @@ def draw_vehicle_plans(
     plans_by_vehicle: Dict[int, DecodedVehiclePlan],
     colors: Optional[List[Tuple[int, int, int]]] = None,
     focus_vehicle_id: Optional[int] = None,
+    focus_trip_index: Optional[int] = None,
+    active_trip_index: Optional[int] = None,
     dim_others: bool = True,
     draw_arrows: bool = True,
 ) -> None:
     if mesh is None:
         return
     palette = colors or VisualTheme.vehicle_route_colors
+    trip_focus_mode = focus_vehicle_id is not None and (
+        focus_trip_index is not None or active_trip_index is not None
+    )
     for vehicle_id, plan in plans_by_vehicle.items():
         is_focused = focus_vehicle_id is None or vehicle_id == focus_vehicle_id
         if focus_vehicle_id is not None and not is_focused and not dim_others:
@@ -291,13 +296,45 @@ def draw_vehicle_plans(
             points = _trip_polyline_from_stored(mesh, trip)
             if len(points) < 2:
                 continue
+
+            if trip_focus_mode and is_focused:
+                highlighted_trip = (
+                    focus_trip_index
+                    if focus_trip_index is not None
+                    else active_trip_index
+                )
+                is_active_trip = trip_index == highlighted_trip
+                if not is_active_trip:
+                    ghost = _blend_with_map(base_color, 0.12)
+                    _draw_dashed_polyline(
+                        screen,
+                        points,
+                        ghost,
+                        width=1,
+                        dash_length=4.0,
+                        gap_length=4.0,
+                    )
+                    continue
+                pygame.draw.lines(screen, color, False, points, width=3)
+                if draw_arrows:
+                    emphasize = {len(points) - 2} if len(points) >= 2 else set()
+                    draw_polyline_arrows(screen, points, color, emphasize_indices=emphasize)
+                continue
+
             if trip_index == 0:
                 pygame.draw.lines(screen, color, False, points, width=3)
             else:
                 faded = color if is_focused else _blend_with_map(base_color, 0.18)
                 if is_focused:
                     faded = _blend_with_map(base_color, 0.55)
-                _draw_dashed_polyline(screen, points, faded, width=2)
+                _draw_dashed_polyline(
+                    screen,
+                    points,
+                    faded,
+                    width=2,
+                    dash_length=4.0,
+                    gap_length=4.0,
+                )
             if draw_arrows and is_focused:
                 emphasize = {len(points) - 2} if len(points) >= 2 else set()
                 draw_polyline_arrows(screen, points, color, emphasize_indices=emphasize)
@@ -308,16 +345,29 @@ def draw_runner_up_plan(
     mesh: Optional[DeliveryMesh],
     plan: DecodedVehiclePlan,
     color: Tuple[int, int, int] = VisualTheme.route_second_best,
+    trip_index: Optional[int] = None,
 ) -> None:
     if mesh is None:
         return
-    for trip in plan.trips:
+    trips = enumerate(plan.trips)
+    if trip_index is not None:
+        if trip_index < 0 or trip_index >= len(plan.trips):
+            return
+        trips = [(trip_index, plan.trips[trip_index])]
+    for _, trip in trips:
         if len(trip.stops) < 2:
             continue
         points = _trip_polyline_from_stored(mesh, trip)
         if len(points) < 2:
             continue
-        _draw_dashed_polyline(screen, points, color, width=1)
+        _draw_dashed_polyline(
+            screen,
+            points,
+            color,
+            width=1,
+            dash_length=12.0,
+            gap_length=8.0,
+        )
 
 
 def draw_route_paths(

@@ -5,9 +5,11 @@ import unittest
 from traveling_salesman_problem.problem.vrp_decoder import DecodedVehiclePlan
 from traveling_salesman_problem.problem.vrp_models import DEPOT_ID, Trip, TripStop
 from traveling_salesman_problem.visualization.route_panel import (
+    build_route_panel_rows,
     filter_plans_by_focus,
     format_trip_line,
     format_vehicle_section,
+    hit_test_route_panel,
 )
 
 
@@ -49,6 +51,17 @@ class RoutePanelTests(unittest.TestCase):
         self.assertEqual(set(filter_plans_by_focus(plans, None)), {0, 1})
         self.assertEqual(set(filter_plans_by_focus(plans, 1)), {1})
         self.assertEqual(filter_plans_by_focus(plans, 9), {})
+
+    def test_hit_test_trip_row(self):
+        plan = DecodedVehiclePlan(
+            trips=[_trip((DEPOT_ID, 0), ("A", 5), (DEPOT_ID, 0))],
+            total_distance=10.0,
+            priority_penalty=0.0,
+            fitness=10.0,
+        )
+        rows = build_route_panel_rows({0: plan}, capacity=10)
+        hit = hit_test_route_panel(rows, 20, 42, 12, 26, 400)
+        self.assertEqual(hit, ("trip", 0, 0))
 
 
 if __name__ == "__main__":

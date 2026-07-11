@@ -1,11 +1,177 @@
 """Estrutura visual da janela: sidebar, mapa e cabeçalhos."""
 
-from typing import List, Tuple
+from dataclasses import dataclass
+from typing import List, Literal, Optional, Tuple
 
 import pygame
 
 from traveling_salesman_problem.config.visual_theme import VisualTheme, priority_to_color
 from traveling_salesman_problem.visualization.fonts import get_monospace_font, get_user_interface_font
+
+LegendIconKind = Literal[
+    "square",
+    "circle",
+    "blocked",
+    "line_solid",
+    "line_dashed",
+    "mesh_line",
+    "priority_bar",
+    "hint",
+]
+
+
+@dataclass(frozen=True)
+class LegendItem:
+    kind: LegendIconKind
+    label: str
+    color: Tuple[int, int, int] = (0, 0, 0)
+
+
+def _blend_with_map(color: Tuple[int, int, int], alpha: float) -> Tuple[int, int, int]:
+    background = VisualTheme.background_map
+    return tuple(
+        int(channel * alpha + background[index] * (1.0 - alpha))
+        for index, channel in enumerate(color)
+    )
+
+
+def _build_legend_items(
+    show_mesh: bool,
+    vehicle_count: int,
+    focus_vehicle_id: Optional[int],
+    has_runner_up: bool,
+    focus_trip_index: Optional[int] = None,
+    trip_auto_cycle: bool = False,
+) -> List[LegendItem]:
+    items: List[LegendItem] = [
+        LegendItem("square", "Depósito", VisualTheme.depot_fill),
+        LegendItem("priority_bar", "Entrega (prior. 1 → 10)"),
+        LegendItem("circle", "Nó de trânsito", VisualTheme.transit_fill),
+        LegendItem("blocked", "Bloqueado (clique no mapa)", VisualTheme.blocked_fill),
+    ]
+
+    if show_mesh:
+        items.append(LegendItem("mesh_line", "Aresta da malha", VisualTheme.mesh_edge))
+
+    focused = focus_vehicle_id is not None
+    palette = VisualTheme.vehicle_route_colors
+
+    if vehicle_count <= 1 and not focused:
+        route_color = palette[0]
+        items.append(LegendItem("line_solid", "Rota — viagem 1", route_color))
+        items.append(LegendItem("line_dashed", "Rota — viagens 2+", route_color))
+    else:
+        for vehicle_id in range(max(1, vehicle_count)):
+            base_color = palette[vehicle_id % len(palette)]
+            if focused and vehicle_id != focus_vehicle_id:
+                continue
+            items.append(
+                LegendItem(
+                    "line_solid",
+                    f"V{vehicle_id + 1} rota",
+                    base_color,
+                )
+            )
+        if focused and vehicle_count > 1:
+            items.append(
+                LegendItem(
+                    "line_solid",
+                    "Outros veículos (foco)",
+                    _blend_with_map(palette[0], 0.25),
+                )
+            )
+            if has_runner_up:
+                items.append(
+                    LegendItem(
+                        "line_dashed",
+                        "2ª melhor — viagem ativa",
+                        VisualTheme.route_second_best,
+                    )
+                )
+            focus_color = palette[focus_vehicle_id % len(palette)]
+            if focus_trip_index is not None:
+                items.append(
+                    LegendItem(
+                        "line_solid",
+                        f"Viagem {focus_trip_index + 1} (fixa)",
+                        focus_color,
+                    )
+                )
+            elif trip_auto_cycle:
+                items.append(
+                    LegendItem(
+                        "line_solid",
+                        "Viagem ativa (auto)",
+                        focus_color,
+                    )
+                )
+            items.append(LegendItem("circle", "Animação (foco)", focus_color))
+
+    items.append(LegendItem("hint", "Clique viagem no painel · mapa: bloquear"))
+    return items
+
+
+def _draw_legend_icon(
+    surface: pygame.Surface,
+    item: LegendItem,
+    center_x: int,
+    center_y: int,
+) -> None:
+    if item.kind == "square":
+        rect = pygame.Rect(0, 0, 9, 9)
+        rect.center = (center_x, center_y)
+        pygame.draw.rect(surface, VisualTheme.depot_stroke, rect.inflate(2, 2))
+        pygame.draw.rect(surface, item.color, rect)
+    elif item.kind == "circle":
+        pygame.draw.circle(surface, VisualTheme.city_stroke, (center_x, center_y), 6)
+        pygame.draw.circle(surface, item.color, (center_x, center_y), 5)
+    elif item.kind == "blocked":
+        pygame.draw.circle(surface, item.color, (center_x, center_y), 5)
+        offset = 3
+        pygame.draw.line(
+            surface,
+            VisualTheme.blocked_x,
+            (center_x - offset, center_y - offset),
+            (center_x + offset, center_y + offset),
+            2,
+        )
+        pygame.draw.line(
+            surface,
+            VisualTheme.blocked_x,
+            (center_x - offset, center_y + offset),
+            (center_x + offset, center_y - offset),
+            2,
+        )
+    elif item.kind in ("line_solid", "mesh_line"):
+        pygame.draw.line(
+            surface,
+            item.color,
+            (center_x - 7, center_y),
+            (center_x + 7, center_y),
+            2 if item.kind == "line_solid" else 1,
+        )
+    elif item.kind == "line_dashed":
+        x_start = center_x - 7
+        for segment in range(3):
+            seg_x = x_start + segment * 5
+            pygame.draw.line(
+                surface,
+                item.color,
+                (seg_x, center_y),
+                (min(seg_x + 3, center_x + 7), center_y),
+                2,
+            )
+    elif item.kind == "priority_bar":
+        sample_priorities = (1, 5, 10)
+        for index, priority in enumerate(sample_priorities):
+            pygame.draw.circle(
+                surface,
+                priority_to_color(priority),
+                (center_x - 6 + index * 6, center_y),
+                4,
+            )
+    elif item.kind == "hint":
+        return
 
 
 def draw_application_chrome(
@@ -202,14 +368,48 @@ def draw_route_text_panel(
     position_x: int,
     position_y: int,
     width: int,
+    *,
+    row_vehicle_ids: Optional[List[Optional[int]]] = None,
+    row_trip_indices: Optional[List[Optional[int]]] = None,
+    row_is_header: Optional[List[bool]] = None,
+    focus_vehicle_id: Optional[int] = None,
+    focus_trip_index: Optional[int] = None,
+    active_trip_index: Optional[int] = None,
 ) -> int:
     row_font = get_monospace_font(10)
     bold_font = get_monospace_font(10, bold=True)
     current_y = position_y
-    for line in lines:
-        is_header = line.startswith("Veículo")
+    for index, line in enumerate(lines):
+        is_header = (
+            row_is_header[index]
+            if row_is_header is not None and index < len(row_is_header)
+            else line.startswith("Veículo")
+        )
         font = bold_font if is_header else row_font
         color = VisualTheme.text_primary if is_header else VisualTheme.text_muted
+        vehicle_id = (
+            row_vehicle_ids[index]
+            if row_vehicle_ids is not None and index < len(row_vehicle_ids)
+            else None
+        )
+        trip_index = (
+            row_trip_indices[index]
+            if row_trip_indices is not None and index < len(row_trip_indices)
+            else None
+        )
+        if (
+            not is_header
+            and focus_vehicle_id is not None
+            and vehicle_id == focus_vehicle_id
+        ):
+            highlighted = (
+                focus_trip_index
+                if focus_trip_index is not None
+                else active_trip_index
+            )
+            if trip_index == highlighted:
+                color = VisualTheme.text_primary
+                font = bold_font
         display = line if len(line) <= 52 else f"{line[:49]}…"
         screen.blit(font.render(display, True, color), (position_x, current_y))
         current_y += 16
@@ -220,22 +420,26 @@ def draw_map_legend(
     screen: pygame.Surface,
     position_x: int,
     position_y: int,
+    show_mesh: bool = False,
+    vehicle_count: int = 1,
+    focus_vehicle_id: Optional[int] = None,
+    has_runner_up: bool = False,
+    focus_trip_index: Optional[int] = None,
+    trip_auto_cycle: bool = False,
 ) -> None:
-    legend_items = [
-        (VisualTheme.depot_fill, "Depósito"),
-        (VisualTheme.route_best, "Rota veículo"),
-        (VisualTheme.route_second_best, "2ª melhor (foco)"),
-        (VisualTheme.transit_fill, "Nó de trânsito"),
-        (VisualTheme.blocked_fill, "Nó bloqueado"),
-        (VisualTheme.mesh_edge, "Aresta da malha"),
-        (priority_to_color(1), "Baixa prioridade (1)"),
-        (priority_to_color(5), "Média prioridade (5)"),
-        (priority_to_color(10), "Alta prioridade (10)"),
-    ]
+    legend_items = _build_legend_items(
+        show_mesh=show_mesh,
+        vehicle_count=vehicle_count,
+        focus_vehicle_id=focus_vehicle_id,
+        has_runner_up=has_runner_up,
+        focus_trip_index=focus_trip_index,
+        trip_auto_cycle=trip_auto_cycle,
+    )
     padding = 10
     row_height = 18
     label_font = get_user_interface_font(11)
-    panel_width = 180
+    hint_font = get_user_interface_font(9)
+    panel_width = 210
     panel_height = padding * 2 + row_height * len(legend_items)
     panel_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
     panel_surface.fill((255, 255, 255, 235))
@@ -247,12 +451,19 @@ def draw_map_legend(
         border_radius=6,
     )
 
-    for index, (color, label) in enumerate(legend_items):
+    icon_center_x = padding + 8
+    for index, item in enumerate(legend_items):
         item_y = padding + index * row_height
-        pygame.draw.circle(panel_surface, color, (padding + 6, item_y + 6), 5)
+        if item.kind == "hint":
+            panel_surface.blit(
+                hint_font.render(item.label, True, VisualTheme.text_muted),
+                (padding, item_y + 2),
+            )
+            continue
+        _draw_legend_icon(panel_surface, item, icon_center_x, item_y + 9)
         panel_surface.blit(
-            label_font.render(label, True, VisualTheme.text_muted),
-            (padding + 18, item_y),
+            label_font.render(item.label, True, VisualTheme.text_muted),
+            (padding + 20, item_y),
         )
 
     screen.blit(panel_surface, (position_x, position_y))

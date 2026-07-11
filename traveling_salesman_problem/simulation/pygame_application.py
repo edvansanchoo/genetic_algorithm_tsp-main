@@ -27,31 +27,32 @@ from traveling_salesman_problem.visualization.map_renderer import (
     draw_runner_up_plan,
 )
 from traveling_salesman_problem.visualization.route_animation import (
-    build_animation_polyline,
-    point_along_polyline,
+    TripAnimationState,
+    advance_trip_animation,
 )
 from traveling_salesman_problem.visualization.route_panel import (
+    build_route_panel_rows,
     filter_plans_by_focus,
-    format_vehicle_section,
+    hit_test_route_panel,
 )
 from traveling_salesman_problem.visualization.sidebar_scroll import SidebarScrollView
 
-ANIMATION_SPEED = 0.12  # fração do percurso por segundo
+ANIMATION_SPEED = 0.12
 
 
-def _route_panel_lines(simulation: SimulationState, plans: dict) -> list[str]:
+def _route_panel_data(simulation: SimulationState, plans: dict) -> tuple[list[str], list]:
     capacity = simulation.capacity_slider.integer_value
     visible = filter_plans_by_focus(plans, simulation.focus_vehicle_id)
-    lines: list[str] = []
-    for vehicle_id, plan in sorted(visible.items()):
-        lines.extend(format_vehicle_section(vehicle_id, plan, capacity))
-    return lines
+    rows = build_route_panel_rows(visible, capacity)
+    return [row.text for row in rows], rows
 
 
 def _draw_scrollable_sidebar(
     simulation: SimulationState,
     sidebar_scroll: SidebarScrollView,
     route_lines: list[str],
+    route_rows: list,
+    active_trip_index: int | None,
     controls_width: int,
 ) -> None:
     content_surface = sidebar_scroll.content_surface
@@ -112,7 +113,47 @@ def _draw_scrollable_sidebar(
         VisualTheme.control_margin,
         delivery_section_y + 26,
         controls_width,
+        row_vehicle_ids=[row.vehicle_id for row in route_rows],
+        row_trip_indices=[row.trip_index for row in route_rows],
+        row_is_header=[row.is_vehicle_header for row in route_rows],
+        focus_vehicle_id=simulation.focus_vehicle_id,
+        focus_trip_index=simulation.focus_trip_index,
+        active_trip_index=active_trip_index,
     )
+
+
+def _reset_trip_animation(
+    trip_animation: TripAnimationState,
+    simulation: SimulationState,
+) -> None:
+    start_trip = simulation.focus_trip_index or 0
+    trip_animation.reset(start_trip)
+
+
+def _try_handle_route_panel_click(
+    simulation: SimulationState,
+    event: pygame.event.Event,
+    route_rows: list,
+    controls_width: int,
+    trip_animation: TripAnimationState,
+) -> bool:
+    if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
+        return False
+    panel_y = simulation.delivery_order_section_y + 26
+    hit = hit_test_route_panel(
+        route_rows,
+        event.pos[0],
+        event.pos[1],
+        VisualTheme.control_margin,
+        panel_y,
+        controls_width,
+    )
+    if hit is None:
+        return False
+    kind, vehicle_id, trip_index = hit
+    simulation.handle_route_panel_selection(vehicle_id, kind, trip_index)
+    _reset_trip_animation(trip_animation, simulation)
+    return True
 
 
 def run_application(settings=None) -> None:
@@ -138,8 +179,11 @@ def run_application(settings=None) -> None:
 
     is_running = True
     fullscreen = False
-    animation_progress = 0.0
+    trip_animation = TripAnimationState()
     last_focus_vehicle_id = simulation.focus_vehicle_id
+    last_focus_trip_index = simulation.focus_trip_index
+    active_trip_index: int | None = None
+    route_rows: list = []
 
     while is_running:
         for event in pygame.event.get():
@@ -160,6 +204,7 @@ def run_application(settings=None) -> None:
                 saved_two_opt = simulation.two_opt_toggle.is_active
                 saved_show_mesh = simulation.mesh_toggle.is_active
                 saved_focus = simulation.focus_vehicle_id
+                saved_focus_trip = simulation.focus_trip_index
 
                 screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
                 settings = ApplicationSettings(window_width=event.w, window_height=event.h)
@@ -174,10 +219,12 @@ def run_application(settings=None) -> None:
                 simulation.mesh_toggle.is_active = saved_show_mesh
                 simulation.show_mesh = saved_show_mesh
                 simulation.focus_vehicle_id = saved_focus
+                simulation.focus_trip_index = saved_focus_trip
                 simulation.focus_filter_button.label = simulation.focus_filter_label()
                 simulation.rebuild_scenario()
-                animation_progress = 0.0
+                _reset_trip_animation(trip_animation, simulation)
                 last_focus_vehicle_id = simulation.focus_vehicle_id
+                last_focus_trip_index = simulation.focus_trip_index
 
                 sidebar_scroll = SidebarScrollView(
                     viewport_top=settings.scroll_viewport_top,
@@ -199,8 +246,20 @@ def run_application(settings=None) -> None:
                 else:
                     simulation.handle_control_events(event)
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                controls_width = settings.plot_horizontal_offset - 2 * VisualTheme.control_margin
                 if sidebar_scroll.is_mouse_in_viewport(event.pos):
-                    simulation.handle_control_events(sidebar_scroll.translate_event(event))
+                    translated = sidebar_scroll.translate_event(event)
+                    if _try_handle_route_panel_click(
+                        simulation,
+                        translated,
+                        route_rows,
+                        controls_width,
+                        trip_animation,
+                    ):
+                        last_focus_vehicle_id = simulation.focus_vehicle_id
+                        last_focus_trip_index = simulation.focus_trip_index
+                    else:
+                        simulation.handle_control_events(translated)
                 elif event.pos[0] >= settings.plot_horizontal_offset:
                     simulation.toggle_blocked_at(event.pos)
             elif event.type in (
@@ -211,10 +270,15 @@ def run_application(settings=None) -> None:
                     simulation.handle_control_events(sidebar_scroll.translate_event(event))
 
         previous_focus = simulation.focus_vehicle_id
+        previous_trip = simulation.focus_trip_index
         simulation.update_controls_if_changed()
-        if simulation.focus_vehicle_id != previous_focus:
-            animation_progress = 0.0
+        if (
+            simulation.focus_vehicle_id != previous_focus
+            or simulation.focus_trip_index != previous_trip
+        ):
+            _reset_trip_animation(trip_animation, simulation)
             last_focus_vehicle_id = simulation.focus_vehicle_id
+            last_focus_trip_index = simulation.focus_trip_index
 
         (
             generation_number,
@@ -226,14 +290,36 @@ def run_application(settings=None) -> None:
             histories,
         ) = simulation.run_one_generation()
 
-        if simulation.focus_vehicle_id != last_focus_vehicle_id:
-            animation_progress = 0.0
+        if (
+            simulation.focus_vehicle_id != last_focus_vehicle_id
+            or simulation.focus_trip_index != last_focus_trip_index
+        ):
+            _reset_trip_animation(trip_animation, simulation)
             last_focus_vehicle_id = simulation.focus_vehicle_id
+            last_focus_trip_index = simulation.focus_trip_index
 
-        route_lines = _route_panel_lines(simulation, plans)
+        route_lines, route_rows = _route_panel_data(simulation, plans)
         sidebar_scroll.set_content_height(
             simulation.calculate_scrollable_content_height(max(1, len(route_lines)))
         )
+
+        focus_id = simulation.focus_vehicle_id
+        locked_trip = simulation.focus_trip_index
+        trip_auto_cycle = focus_id is not None and locked_trip is None
+        animation_cursor = None
+
+        if focus_id is not None and focus_id in plans and simulation.mesh is not None:
+            dt_seconds = clock.get_time() / 1000.0
+            animation_cursor, active_trip_index = advance_trip_animation(
+                trip_animation,
+                simulation.mesh,
+                plans[focus_id],
+                dt_seconds,
+                locked_trip_index=locked_trip,
+                speed=ANIMATION_SPEED,
+            )
+        else:
+            active_trip_index = None
 
         draw_application_chrome(screen, settings.window_width, settings.window_height)
         draw_map_header(
@@ -249,8 +335,14 @@ def run_application(settings=None) -> None:
         )
         draw_map_legend(
             screen,
-            settings.window_width - 190,
+            settings.window_width - 220,
             VisualTheme.map_header_height + 12,
+            show_mesh=simulation.show_mesh,
+            vehicle_count=simulation.vehicle_count_slider.integer_value,
+            focus_vehicle_id=focus_id,
+            has_runner_up=(focus_id is not None and focus_id in runner_up_plans),
+            focus_trip_index=locked_trip,
+            trip_auto_cycle=trip_auto_cycle,
         )
         draw_convergence_chart(
             screen,
@@ -261,7 +353,14 @@ def run_application(settings=None) -> None:
         )
 
         controls_width = settings.plot_horizontal_offset - 2 * VisualTheme.control_margin
-        _draw_scrollable_sidebar(simulation, sidebar_scroll, route_lines, controls_width)
+        _draw_scrollable_sidebar(
+            simulation,
+            sidebar_scroll,
+            route_lines,
+            route_rows,
+            active_trip_index,
+            controls_width,
+        )
         sidebar_scroll.blit_to_screen(screen)
         draw_sidebar_footer(screen, settings.sidebar_footer_y)
 
@@ -269,19 +368,22 @@ def run_application(settings=None) -> None:
         if simulation.show_mesh:
             draw_mesh_edges(screen, simulation.mesh)
 
-        focus_id = simulation.focus_vehicle_id
+        display_trip_index = locked_trip if locked_trip is not None else active_trip_index
         if focus_id is not None and focus_id in runner_up_plans:
             draw_runner_up_plan(
                 screen,
                 simulation.mesh,
                 runner_up_plans[focus_id],
+                trip_index=display_trip_index,
             )
 
         draw_vehicle_plans(
             screen,
             simulation.mesh,
             plans,
-            focus_vehicle_id=simulation.focus_vehicle_id,
+            focus_vehicle_id=focus_id,
+            focus_trip_index=locked_trip,
+            active_trip_index=active_trip_index,
             dim_others=True,
             draw_arrows=True,
         )
@@ -293,16 +395,11 @@ def run_application(settings=None) -> None:
         draw_depot(screen, simulation.depot)
         draw_blocked_nodes(screen, simulation.mesh)
 
-        if focus_id is not None and focus_id in plans and simulation.mesh is not None:
-            polyline = build_animation_polyline(simulation.mesh, plans[focus_id])
-            if len(polyline) >= 2:
-                dt_seconds = clock.get_time() / 1000.0
-                animation_progress = (animation_progress + ANIMATION_SPEED * dt_seconds) % 1.0
-                cursor = point_along_polyline(polyline, animation_progress)
-                color = VisualTheme.vehicle_route_colors[
-                    focus_id % len(VisualTheme.vehicle_route_colors)
-                ]
-                draw_animation_cursor(screen, cursor, color)
+        if animation_cursor is not None and focus_id is not None:
+            color = VisualTheme.vehicle_route_colors[
+                focus_id % len(VisualTheme.vehicle_route_colors)
+            ]
+            draw_animation_cursor(screen, animation_cursor, color)
 
         print(
             f"Geração {generation_number}: "

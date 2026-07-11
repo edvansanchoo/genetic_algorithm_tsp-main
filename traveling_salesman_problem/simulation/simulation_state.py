@@ -86,6 +86,7 @@ class SimulationState:
     mesh_toggle: Optional[ToggleButton] = None
 
     focus_vehicle_id: Optional[int] = None
+    focus_trip_index: Optional[int] = None
     show_mesh: bool = False
 
     last_vehicle_count: int = 0
@@ -123,7 +124,40 @@ class SimulationState:
     def focus_filter_label(self) -> str:
         if self.focus_vehicle_id is None:
             return "Filtro: Todos"
-        return f"Filtro: V{self.focus_vehicle_id + 1}"
+        label = f"Filtro: V{self.focus_vehicle_id + 1}"
+        if self.focus_trip_index is not None:
+            label += f" · Viagem {self.focus_trip_index + 1}"
+        return label
+
+    def set_focus_trip(self, trip_index: Optional[int]) -> None:
+        if self.focus_vehicle_id is None:
+            return
+        if trip_index is not None and trip_index == self.focus_trip_index:
+            self.focus_trip_index = None
+        else:
+            self.focus_trip_index = trip_index
+        if self.focus_filter_button is not None:
+            self.focus_filter_button.label = self.focus_filter_label()
+
+    def handle_route_panel_selection(
+        self,
+        vehicle_id: int,
+        kind: str,
+        trip_index: Optional[int],
+    ) -> None:
+        if vehicle_id not in self.vehicle_states:
+            return
+        if kind == "header":
+            self.focus_vehicle_id = vehicle_id
+            self.focus_trip_index = None
+        elif kind == "trip" and trip_index is not None:
+            if self.focus_vehicle_id != vehicle_id:
+                self.focus_vehicle_id = vehicle_id
+                self.focus_trip_index = trip_index
+            else:
+                self.set_focus_trip(trip_index)
+        if self.focus_filter_button is not None:
+            self.focus_filter_button.label = self.focus_filter_label()
 
     def cycle_focus_vehicle(self) -> None:
         ids = sorted(self.vehicle_states.keys())
@@ -141,6 +175,7 @@ class SimulationState:
                     self.focus_vehicle_id = None
                 else:
                     self.focus_vehicle_id = ids[index + 1]
+        self.focus_trip_index = None
         if self.focus_filter_button is not None:
             self.focus_filter_button.label = self.focus_filter_label()
 
@@ -150,6 +185,7 @@ class SimulationState:
             and self.focus_vehicle_id not in self.vehicle_states
         ):
             self.focus_vehicle_id = None
+            self.focus_trip_index = None
         if self.focus_filter_button is not None:
             self.focus_filter_button.label = self.focus_filter_label()
         if self.mesh_toggle is not None:
@@ -480,7 +516,7 @@ class SimulationState:
             width=controls_width,
             height=settings.regenerate_button_height,
             label=self.focus_filter_label(),
-            subtitle="Cicla Todos → V1 → V2 → …",
+            subtitle="Cicla Todos → V1 → V2 → … · clique viagem",
         )
 
     def handle_control_events(self, event: pygame.event.Event) -> None:
