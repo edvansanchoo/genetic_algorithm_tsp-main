@@ -87,6 +87,25 @@ def build_complete_network(nodes: Dict[str, Coordinate]) -> RoadNetwork:
     )
 
 
+def build_delivery_hub_network(
+    nodes: Dict[str, Coordinate],
+    delivery_ids: Sequence[str],
+) -> RoadNetwork:
+    delivery_set = set(delivery_ids)
+    node_ids = list(nodes.keys())
+    edges: List[Tuple[str, str]] = []
+    for index, node_a in enumerate(node_ids):
+        for node_b in node_ids[index + 1 :]:
+            if node_a in delivery_set and node_b in delivery_set:
+                continue
+            edges.append((node_a, node_b))
+    return RoadNetwork(
+        nodes=dict(nodes),
+        edges=edges,
+        connection_radius=0.0,
+    )
+
+
 def build_road_network(nodes: Dict[str, Coordinate], radius: float) -> RoadNetwork:
     return RoadNetwork(
         nodes=dict(nodes),
@@ -162,11 +181,13 @@ def find_path_weighted(
     used_edges: Optional[Set[EdgeKey]] = None,
     reuse_penalty: float = 1.0,
     forbidden_edges: Optional[Set[EdgeKey]] = None,
+    no_through: Optional[Set[str]] = None,
 ) -> List[str]:
     """Dijkstra; forbidden_edges are impassable; used_edges cost × reuse_penalty."""
     blocked = blocked or set()
     used_edges = used_edges or set()
     forbidden_edges = forbidden_edges or set()
+    no_through = no_through or set()
     if origin not in network.nodes or destination not in network.nodes:
         return []
     if origin in blocked or destination in blocked:
@@ -187,6 +208,8 @@ def find_path_weighted(
             break
         for neighbor in adjacency.get(node, []):
             if neighbor in blocked:
+                continue
+            if neighbor in no_through and neighbor != destination:
                 continue
             new_cost = cost + edge_cost(
                 network,
@@ -218,9 +241,11 @@ def find_path(
     origin: str,
     destination: str,
     blocked: Optional[Set[str]] = None,
+    no_through: Optional[Set[str]] = None,
 ) -> List[str]:
     """BFS; nós em `blocked` não podem ser intermediários nem destino."""
     blocked = blocked or set()
+    no_through = no_through or set()
     if origin not in network.nodes or destination not in network.nodes:
         return []
     if origin in blocked or destination in blocked:
@@ -241,6 +266,8 @@ def find_path(
             if neighbor in visited:
                 continue
             if neighbor in blocked:
+                continue
+            if neighbor in no_through and neighbor != destination:
                 continue
             new_path = path + [neighbor]
             if neighbor == destination:

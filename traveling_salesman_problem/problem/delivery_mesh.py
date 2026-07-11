@@ -10,7 +10,7 @@ from traveling_salesman_problem.problem.road_network import (
     Coordinate,
     EdgeKey,
     RoadNetwork,
-    build_complete_network,
+    build_delivery_hub_network,
     find_path,
     find_path_weighted,
     generate_transit_nodes,
@@ -88,7 +88,7 @@ def build_delivery_mesh(
             blocked_ids.add(node_id)
             blocked_coordinates[node_id] = coordinate
 
-        network = build_complete_network(nodes)
+        network = build_delivery_hub_network(nodes, delivery_ids)
         mesh = DeliveryMesh(
             network=network,
             delivery_ids=delivery_ids,
@@ -162,7 +162,7 @@ def build_vrp_mesh(
             blocked_ids.add(node_id)
             blocked_coordinates[node_id] = coordinate
 
-        network = build_complete_network(nodes)
+        network = build_delivery_hub_network(nodes, delivery_ids)
         mesh = DeliveryMesh(
             network=network,
             delivery_ids=delivery_ids,
@@ -217,6 +217,16 @@ def _id_for_coordinate(mesh: DeliveryMesh, coordinate: Coordinate) -> str:
     raise KeyError(f"Unknown delivery coordinate: {coordinate}")
 
 
+def _no_through_for_segment(
+    mesh: DeliveryMesh,
+    origin_id: str,
+    destination_id: str,
+) -> Optional[Set[str]]:
+    if origin_id in mesh.delivery_ids and destination_id in mesh.delivery_ids:
+        return {DEPOT_ID}
+    return None
+
+
 def delivery_segment_path(
     mesh: DeliveryMesh,
     origin: Coordinate,
@@ -235,6 +245,7 @@ def delivery_segment_path(
         used_edges=used_edges,
         reuse_penalty=reuse_penalty,
         forbidden_edges=forbidden_edges,
+        no_through=_no_through_for_segment(mesh, origin_id, destination_id),
     )
 
 
@@ -269,7 +280,13 @@ def deliveries_mutually_reachable(mesh: DeliveryMesh) -> bool:
         return True
     start = mesh.delivery_ids[0]
     for other in mesh.delivery_ids[1:]:
-        if not find_path(mesh.network, start, other, set(mesh.blocked_ids)):
+        if not find_path(
+            mesh.network,
+            start,
+            other,
+            set(mesh.blocked_ids),
+            no_through=_no_through_for_segment(mesh, start, other),
+        ):
             return False
     return True
 

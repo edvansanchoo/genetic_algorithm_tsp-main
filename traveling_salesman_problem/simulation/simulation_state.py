@@ -183,10 +183,11 @@ class SimulationState:
             if self.capacity_slider is not None
             else settings.initial_capacity
         )
-        transit_count = (
+        transit_count = max(
+            1,
             self.transit_count_slider.integer_value
             if self.transit_count_slider is not None
-            else settings.initial_transit_count
+            else settings.initial_transit_count,
         )
         blocked_count = max(
             1,
@@ -361,7 +362,7 @@ class SimulationState:
             width=half_width,
             height=settings.count_slider_height,
             value=settings.initial_transit_count,
-            minimum_value=0,
+            minimum_value=1,
             maximum_value=settings.maximum_mesh_nodes_per_type,
             label="Trânsito",
         )

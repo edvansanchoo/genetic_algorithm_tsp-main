@@ -153,7 +153,7 @@ class DeliveryMeshTests(unittest.TestCase):
         self.assertIn((50.0, 40.0), polyline)
         self.assertGreaterEqual(len(polyline), 3)
 
-    def test_generated_mesh_is_complete_graph(self):
+    def test_generated_mesh_is_hub_graph(self):
         cities = [(0.0, 0.0), (100.0, 0.0), (50.0, 80.0)]
         mesh = build_delivery_mesh(
             cities,
@@ -163,15 +163,18 @@ class DeliveryMeshTests(unittest.TestCase):
             rng_seed=1,
         )
         node_count = len(mesh.network.nodes)
-        expected_edges = node_count * (node_count - 1) // 2
+        delivery_count = len(mesh.delivery_ids)
+        expected_edges = (
+            node_count * (node_count - 1) // 2
+            - delivery_count * (delivery_count - 1) // 2
+        )
         self.assertEqual(len(mesh.network.edges), expected_edges)
-        for transit_id in mesh.transit_ids:
-            degree = sum(
-                1
-                for node_a, node_b in mesh.network.edges
-                if transit_id in (node_a, node_b)
-            )
-            self.assertGreaterEqual(degree, 1)
+        delivery_edge_set = {
+            tuple(sorted((node_a, node_b)))
+            for node_a, node_b in mesh.network.edges
+            if node_a in mesh.delivery_ids and node_b in mesh.delivery_ids
+        }
+        self.assertEqual(delivery_edge_set, set())
 
     def test_blocked_not_in_network_nodes(self):
         cities = [(0.0, 0.0), (100.0, 0.0)]
@@ -208,9 +211,11 @@ class VrpMeshTests(unittest.TestCase):
         self.assertIn("A", mesh.network.nodes)
         self.assertIn("B", mesh.network.nodes)
         node_count = len(mesh.network.nodes)
+        delivery_count = len(mesh.delivery_ids)
         self.assertEqual(
             len(mesh.network.edges),
-            node_count * (node_count - 1) // 2,
+            node_count * (node_count - 1) // 2
+            - delivery_count * (delivery_count - 1) // 2,
         )
         path = delivery_segment_path(mesh, depot, deliveries[0].coordinate)
         self.assertTrue(path)
