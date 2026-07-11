@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import random
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from traveling_salesman_problem.problem.delivery_mesh import DeliveryMesh
 from traveling_salesman_problem.problem.vrp_decoder import (
@@ -15,6 +15,76 @@ from traveling_salesman_problem.problem.vrp_decoder import (
 from traveling_salesman_problem.problem.vrp_models import Coordinate, DeliveryToken
 
 TokenRoute = List[DeliveryToken]
+
+
+def plan_has_drawable_trips(plan: Optional[DecodedVehiclePlan]) -> bool:
+    if plan is None:
+        return False
+    return any(len(trip.stops) >= 2 for trip in plan.trips)
+
+
+def _should_replace_best_plan(
+    candidate_fitness: float,
+    candidate_plan: DecodedVehiclePlan,
+    current_fitness: float,
+    current_plan: Optional[DecodedVehiclePlan],
+) -> bool:
+    candidate_drawable = plan_has_drawable_trips(candidate_plan)
+    current_drawable = plan_has_drawable_trips(current_plan)
+    if candidate_drawable and not current_drawable:
+        return True
+    if not candidate_drawable:
+        return False
+    return candidate_fitness < current_fitness
+
+
+def select_runner_up_plan(
+    evaluated: List[Tuple[float, TokenRoute, DecodedVehiclePlan]],
+    best_permutation: TokenRoute,
+    best_fitness: float,
+) -> Optional[DecodedVehiclePlan]:
+    for index in range(1, len(evaluated)):
+        fitness, permutation, plan = evaluated[index]
+        if not plan_has_drawable_trips(plan):
+            continue
+        if permutation != best_permutation or fitness > best_fitness:
+            return plan
+    return None
+
+
+def _pick_best_evaluated(
+    evaluated: List[Tuple[float, TokenRoute, DecodedVehiclePlan]],
+) -> Tuple[float, TokenRoute, DecodedVehiclePlan]:
+    for item in evaluated:
+        if plan_has_drawable_trips(item[2]):
+            return item
+    return evaluated[0]
+
+
+def _sample_drawable_permutation(
+    tokens: List[DeliveryToken],
+    depot: Coordinate,
+    mesh: DeliveryMesh,
+    capacity: int,
+    priority_weight: float,
+    max_attempts: int = 400,
+) -> Optional[Tuple[TokenRoute, DecodedVehiclePlan]]:
+    if not tokens:
+        return None
+    for _ in range(max_attempts):
+        permutation = list(tokens)
+        random.shuffle(permutation)
+        plan = _evaluate(
+            permutation,
+            tokens,
+            depot,
+            mesh,
+            capacity,
+            priority_weight,
+        )
+        if plan_has_drawable_trips(plan):
+            return permutation, plan
+    return None
 
 
 def order_crossover_tokens(
@@ -83,6 +153,7 @@ class VehicleGeneticState:
     best_permutation: List[DeliveryToken] = field(default_factory=list)
     best_fitness: float = float("inf")
     best_plan: Optional[DecodedVehiclePlan] = None
+    runner_up_plan: Optional[DecodedVehiclePlan] = None
     fitness_history: List[float] = field(default_factory=list)
 
 
@@ -93,8 +164,6 @@ def _evaluate(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float,
-    plan_fallback_penalty: float = 20.0,
-    plan_last_resort_penalty: float = 1.75,
 ) -> DecodedVehiclePlan:
     return decode_vehicle_permutation(
         tokens,
@@ -103,8 +172,6 @@ def _evaluate(
         mesh,
         capacity,
         priority_weight,
-        plan_fallback_penalty=plan_fallback_penalty,
-        plan_last_resort_penalty=plan_last_resort_penalty,
     )
 
 
@@ -116,8 +183,6 @@ def initialize_vehicle_genetic(
     mesh: DeliveryMesh,
     capacity: int,
     priority_weight: float,
-    plan_fallback_penalty: float = 20.0,
-    plan_last_resort_penalty: float = 1.75,
 ) -> VehicleGeneticState:
     if not tokens:
         empty = VehicleGeneticState(
@@ -132,12 +197,22 @@ def initialize_vehicle_genetic(
         return empty
 
     population: List[TokenRoute] = []
-    for _ in range(population_size):
+    drawable_seed = _sample_drawable_permutation(
+        tokens,
+        depot,
+        mesh,
+        capacity,
+        priority_weight,
+    )
+    if drawable_seed is not None:
+        population.append(list(drawable_seed[0]))
+
+    while len(population) < population_size:
         individual = list(tokens)
         random.shuffle(individual)
         population.append(individual)
 
-    ranked = []
+    evaluated = []
     for individual in population:
         plan = _evaluate(
             individual,
@@ -146,13 +221,11 @@ def initialize_vehicle_genetic(
             mesh,
             capacity,
             priority_weight,
-            plan_fallback_penalty,
-            plan_last_resort_penalty,
         )
-        ranked.append((plan.fitness, individual, plan))
-    ranked.sort(key=lambda item: item[0])
+        evaluated.append((plan.fitness, individual, plan))
+    evaluated.sort(key=lambda item: item[0])
 
-    best_fitness, best_permutation, best_plan = ranked[0]
+    best_fitness, best_permutation, best_plan = _pick_best_evaluated(evaluated)
     state = VehicleGeneticState(
         vehicle_id=vehicle_id,
         tokens=list(tokens),
@@ -160,6 +233,7 @@ def initialize_vehicle_genetic(
         best_permutation=list(best_permutation),
         best_fitness=best_fitness,
         best_plan=best_plan,
+        runner_up_plan=select_runner_up_plan(evaluated, best_permutation, best_fitness),
     )
     state.fitness_history.append(best_fitness)
     return state
@@ -174,8 +248,6 @@ def run_vehicle_generation(
     mutation_probability: float,
     use_2opt: bool = False,
     n_elite: int = 2,
-    plan_fallback_penalty: float = 20.0,
-    plan_last_resort_penalty: float = 1.75,
 ) -> VehicleGeneticState:
     del use_2opt  # reserved; decoder-aware 2-opt deferred
     if not state.tokens:
@@ -191,17 +263,25 @@ def run_vehicle_generation(
             mesh,
             capacity,
             priority_weight,
-            plan_fallback_penalty,
-            plan_last_resort_penalty,
         )
         evaluated.append((plan.fitness, individual, plan))
     evaluated.sort(key=lambda item: item[0])
 
-    best_fitness, best_permutation, best_plan = evaluated[0]
-    if best_fitness < state.best_fitness:
+    best_fitness, best_permutation, best_plan = _pick_best_evaluated(evaluated)
+    if _should_replace_best_plan(
+        best_fitness,
+        best_plan,
+        state.best_fitness,
+        state.best_plan,
+    ):
         state.best_fitness = best_fitness
         state.best_permutation = list(best_permutation)
         state.best_plan = best_plan
+    state.runner_up_plan = select_runner_up_plan(
+        evaluated,
+        state.best_permutation,
+        state.best_fitness,
+    )
     state.fitness_history.append(state.best_fitness)
 
     population_size = len(state.population)

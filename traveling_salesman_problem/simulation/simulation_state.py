@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import random
 from dataclasses import dataclass, field
+from hashlib import md5
 from typing import Dict, List, Optional, Tuple
 
 import pygame
@@ -15,7 +16,11 @@ from traveling_salesman_problem.problem.city_generator import (
     generate_random_city_coordinate,
     generate_random_priorities,
 )
-from traveling_salesman_problem.problem.delivery_mesh import DeliveryMesh, build_vrp_mesh
+from traveling_salesman_problem.problem.delivery_mesh import (
+    DeliveryMesh,
+    build_vrp_mesh,
+    effective_transit_count,
+)
 from traveling_salesman_problem.problem.priority_presets import apply_hospital_priority_preset
 from traveling_salesman_problem.problem.vrp_assignment import (
     assign_deliveries_greedy,
@@ -26,6 +31,7 @@ from traveling_salesman_problem.problem.vrp_models import Coordinate, DeliveryPo
 from traveling_salesman_problem.simulation.vehicle_genetic import (
     VehicleGeneticState,
     initialize_vehicle_genetic,
+    plan_has_drawable_trips,
     run_vehicle_generation,
 )
 from traveling_salesman_problem.visualization.widgets import (
@@ -36,6 +42,20 @@ from traveling_salesman_problem.visualization.widgets import (
 )
 
 POINT_IDS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _mesh_rng_seed(
+    depot: Coordinate,
+    deliveries: List[DeliveryPoint],
+    transit_count: int,
+    blocked_count: int,
+) -> int:
+    parts = [depot]
+    for point in sorted(deliveries, key=lambda item: item.id):
+        parts.append((point.id, point.coordinate))
+    parts.extend([transit_count, blocked_count])
+    digest = md5(repr(parts).encode("utf-8")).hexdigest()
+    return int(digest[:8], 16)
 
 
 @dataclass
@@ -70,7 +90,9 @@ class SimulationState:
     last_vehicle_count: int = 0
     last_capacity: int = 0
     last_transit_count: int = 0
+    last_effective_transit_count: int = 0
     last_blocked_count: int = 0
+    last_priority_weight: float = -1.0
 
     section_algorithm_y: int = 0
     section_fleet_y: int = 0
@@ -183,7 +205,7 @@ class SimulationState:
             if self.capacity_slider is not None
             else settings.initial_capacity
         )
-        transit_count = max(
+        requested_transit = max(
             1,
             self.transit_count_slider.integer_value
             if self.transit_count_slider is not None
@@ -200,12 +222,27 @@ class SimulationState:
             self.depot = self._random_map_point()
             self.deliveries = self._generate_deliveries()
 
+        transit_count = effective_transit_count(
+            self.deliveries,
+            vehicle_count=vehicle_count,
+            capacity=capacity,
+            requested_transit=requested_transit,
+            maximum_transit=settings.maximum_mesh_nodes_per_type,
+        )
+
         self.mesh = build_vrp_mesh(
             self.depot,
             self.deliveries,
             self.map_bounds(),
             transit_count=transit_count,
             blocked_count=blocked_count,
+            rng_seed=_mesh_rng_seed(
+                self.depot,
+                self.deliveries,
+                transit_count,
+                blocked_count,
+            ),
+            maximum_transit=settings.maximum_mesh_nodes_per_type,
         )
         self.assignment = assign_deliveries_greedy(
             self.deliveries,
@@ -225,16 +262,20 @@ class SimulationState:
                 mesh=self.mesh,
                 capacity=capacity,
                 priority_weight=self.priority_weight if self.priority_weight_slider else 0.0,
-                plan_fallback_penalty=settings.plan_fallback_penalty,
-                plan_last_resort_penalty=settings.plan_last_resort_penalty,
             )
 
         self.generation_counter = itertools.count(start=1)
         self.last_vehicle_count = vehicle_count
         self.last_capacity = capacity
-        self.last_transit_count = transit_count
+        self.last_transit_count = requested_transit
+        self.last_effective_transit_count = transit_count
         self.last_blocked_count = blocked_count
         self._sync_capacity_slider_bounds()
+        if self.capacity_slider is not None:
+            self.last_capacity = self.capacity_slider.integer_value
+        self.last_priority_weight = (
+            self.priority_weight if self.priority_weight_slider is not None else 0.0
+        )
         self._sync_focus_after_rebuild()
 
     def _sync_capacity_slider_bounds(self) -> None:
@@ -416,6 +457,30 @@ class SimulationState:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
             self.apply_hospital_preset()
 
+    def _rescore_vehicle_fitness_for_priority_weight(self) -> None:
+        if self.mesh is None or self.depot is None:
+            return
+        from traveling_salesman_problem.problem.vrp_decoder import (
+            decode_vehicle_permutation,
+        )
+
+        capacity = self.capacity_slider.integer_value
+        priority_weight = self.priority_weight
+        for state in self.vehicle_states.values():
+            if not state.best_permutation:
+                continue
+            plan = decode_vehicle_permutation(
+                state.tokens,
+                state.best_permutation,
+                self.depot,
+                self.mesh,
+                capacity,
+                priority_weight,
+            )
+            if plan_has_drawable_trips(plan):
+                state.best_plan = plan
+                state.best_fitness = plan.fitness
+
     def update_controls_if_changed(self) -> None:
         if self.mesh_toggle is not None:
             self.show_mesh = self.mesh_toggle.is_active
@@ -434,6 +499,8 @@ class SimulationState:
         if any(
             slider.is_dragging
             for slider in (
+                self.mutation_slider,
+                self.priority_weight_slider,
                 self.vehicle_count_slider,
                 self.capacity_slider,
                 self.transit_count_slider,
@@ -444,12 +511,24 @@ class SimulationState:
 
         vehicle_count = self.vehicle_count_slider.integer_value
         capacity = self.capacity_slider.integer_value
-        transit_count = self.transit_count_slider.integer_value
+        requested_transit = max(1, self.transit_count_slider.integer_value)
         blocked_count = self.blocked_count_slider.integer_value
+        effective_transit = (
+            effective_transit_count(
+                self.deliveries,
+                vehicle_count=vehicle_count,
+                capacity=capacity,
+                requested_transit=requested_transit,
+                maximum_transit=self.settings.maximum_mesh_nodes_per_type,
+            )
+            if self.deliveries
+            else requested_transit
+        )
         if (
             vehicle_count != self.last_vehicle_count
             or capacity != self.last_capacity
-            or transit_count != self.last_transit_count
+            or requested_transit != self.last_transit_count
+            or effective_transit != self.last_effective_transit_count
             or blocked_count != self.last_blocked_count
         ):
             self.rebuild_scenario()
@@ -458,6 +537,9 @@ class SimulationState:
         capacity = self.capacity_slider.integer_value
         mutation_probability = self.mutation_slider.value
         priority_weight = self.priority_weight
+        if priority_weight != self.last_priority_weight:
+            self._rescore_vehicle_fitness_for_priority_weight()
+            self.last_priority_weight = priority_weight
 
         for vehicle_id, state in list(self.vehicle_states.items()):
             self.vehicle_states[vehicle_id] = run_vehicle_generation(
@@ -468,8 +550,6 @@ class SimulationState:
                 priority_weight=priority_weight,
                 mutation_probability=mutation_probability,
                 use_2opt=self.two_opt_toggle.is_active,
-                plan_fallback_penalty=self.settings.plan_fallback_penalty,
-                plan_last_resort_penalty=self.settings.plan_last_resort_penalty,
             )
 
         generation_number = next(self.generation_counter)
@@ -477,13 +557,19 @@ class SimulationState:
         total_distance = 0.0
         total_priority = 0.0
         plans = {}
+        runner_up_plans = {}
         histories = {}
         for vehicle_id, state in self.vehicle_states.items():
             total_fitness += state.best_fitness if state.best_fitness != float("inf") else 0.0
-            if state.best_plan is not None:
+            if state.best_plan is not None and plan_has_drawable_trips(state.best_plan):
                 total_distance += state.best_plan.total_distance if state.best_plan.total_distance != float("inf") else 0.0
                 total_priority += state.best_plan.priority_penalty * priority_weight
                 plans[vehicle_id] = state.best_plan
+            if (
+                state.runner_up_plan is not None
+                and plan_has_drawable_trips(state.runner_up_plan)
+            ):
+                runner_up_plans[vehicle_id] = state.runner_up_plan
             histories[vehicle_id] = list(state.fitness_history)
 
         return (
@@ -492,5 +578,6 @@ class SimulationState:
             total_distance,
             total_priority,
             plans,
+            runner_up_plans,
             histories,
         )
