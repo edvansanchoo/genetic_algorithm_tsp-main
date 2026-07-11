@@ -9,19 +9,51 @@ from traveling_salesman_problem.problem.vrp_models import DEPOT_ID, DeliveryToke
 
 
 def _line_mesh():
+    """Malha com corredores alternativos para ida/volta e viagens sem reutilização."""
     network = RoadNetwork(
         nodes={
             DEPOT_ID: (0.0, 0.0),
             "A": (10.0, 0.0),
             "B": (20.0, 0.0),
+            "N1": (0.0, 15.0),
+            "N2": (10.0, 15.0),
+            "N3": (20.0, 15.0),
+            "S1": (0.0, -15.0),
+            "S2": (10.0, -15.0),
+            "S3": (20.0, -15.0),
+            "W1": (25.0, 10.0),
+            "W2": (5.0, 10.0),
+            "E1": (25.0, -10.0),
+            "E2": (5.0, -10.0),
         },
-        edges=[(DEPOT_ID, "A"), ("A", "B")],
-        connection_radius=15.0,
+        edges=[
+            (DEPOT_ID, "A"),
+            ("A", "B"),
+            (DEPOT_ID, "N1"),
+            ("N1", "N2"),
+            ("N2", "N3"),
+            ("N3", "B"),
+            ("A", "N2"),
+            ("N2", DEPOT_ID),
+            (DEPOT_ID, "S1"),
+            ("S1", "S2"),
+            ("S2", "S3"),
+            ("S3", "B"),
+            (DEPOT_ID, "E2"),
+            ("E2", "S1"),
+            ("B", "W1"),
+            ("W1", DEPOT_ID),
+            ("B", "W2"),
+            ("W2", DEPOT_ID),
+            ("B", "E1"),
+            ("E1", DEPOT_ID),
+        ],
+        connection_radius=100.0,
     )
     return delivery_mesh_from_parts(
         network,
         delivery_ids=["A", "B"],
-        transit_ids=[],
+        transit_ids=["N1", "N2", "N3", "S1", "S2", "S3", "W1", "W2", "E1", "E2"],
     )
 
 

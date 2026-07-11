@@ -44,6 +44,8 @@ def _two_corridor_network():
             "B": (10.0, 10.0),
             "C": (-10.0, 0.0),
             "X": (20.0, 0.0),
+            "E": (25.0, 5.0),
+            "F": (15.0, 20.0),
         },
         edges=[
             (DEPOT_ID, "A"),
@@ -52,6 +54,9 @@ def _two_corridor_network():
             ("B", "X"),
             (DEPOT_ID, "C"),
             ("C", "X"),
+            ("X", "E"),
+            ("E", "F"),
+            ("F", DEPOT_ID),
         ],
         connection_radius=100.0,
     )
@@ -116,7 +121,7 @@ class DecoderReturnDiversificationTests(unittest.TestCase):
         self.assertEqual(trip.path_node_ids[0], [DEPOT_ID, "A", "X"])
         self.assertEqual(trip.path_node_ids[1], ["X", "B", DEPOT_ID])
 
-    def test_decoder_single_edge_fallback_finite(self) -> None:
+    def test_decoder_single_edge_return_requires_reuse(self) -> None:
         network = RoadNetwork(
             nodes={DEPOT_ID: (0.0, 0.0), "X": (10.0, 0.0)},
             edges=[(DEPOT_ID, "X")],
@@ -131,7 +136,7 @@ class DecoderReturnDiversificationTests(unittest.TestCase):
             mesh,
             capacity=10,
         )
-        self.assertTrue(plan.fitness < float("inf"))
+        self.assertEqual(plan.fitness, float("inf"))
 
 
 class InterTripPlanEdgesTests(unittest.TestCase):
@@ -139,7 +144,7 @@ class InterTripPlanEdgesTests(unittest.TestCase):
         mesh = delivery_mesh_from_parts(
             _two_corridor_network(),
             delivery_ids=["A", "X"],
-            transit_ids=["B", "C"],
+            transit_ids=["B", "C", "E", "F"],
         )
         tokens = [
             DeliveryToken("A", 6, priority=5),
@@ -156,9 +161,9 @@ class InterTripPlanEdgesTests(unittest.TestCase):
         trip0_edges = _trip_edges(plan.trips[0])
         trip1_outbound = _edges_from_path(plan.trips[1].path_node_ids[0])
         self.assertFalse(trip0_edges & trip1_outbound)
-        self.assertIn(
-            plan.trips[1].path_node_ids[0],
-            [[DEPOT_ID, "B", "X"], [DEPOT_ID, "C", "X"]],
+        self.assertEqual(plan.trips[1].path_node_ids[0], [DEPOT_ID, "C", "X"])
+        self.assertEqual(
+            plan.trips[1].path_node_ids[1], ["X", "E", "F", DEPOT_ID]
         )
 
 

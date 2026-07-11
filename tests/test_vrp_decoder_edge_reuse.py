@@ -61,7 +61,7 @@ class VrpDecoderEdgeReuseTests(unittest.TestCase):
         self.assertEqual(trip.path_node_ids[0], [DEPOT_ID, "A", "X"])
         self.assertEqual(trip.path_node_ids[1], ["X", "B", DEPOT_ID])
 
-    def test_single_path_still_finite(self) -> None:
+    def test_single_path_return_is_infinite_without_alternate(self) -> None:
         mesh = _line_mesh()
         tokens = [DeliveryToken("X", 1, priority=5)]
         plan = decode_vehicle_permutation(
@@ -71,9 +71,7 @@ class VrpDecoderEdgeReuseTests(unittest.TestCase):
             mesh,
             capacity=10,
         )
-        self.assertTrue(plan.fitness < float("inf"))
-        self.assertEqual(plan.trips[0].path_node_ids[0], [DEPOT_ID, "X"])
-        self.assertEqual(plan.trips[0].path_node_ids[1], ["X", DEPOT_ID])
+        self.assertEqual(plan.fitness, float("inf"))
 
 
 if __name__ == "__main__":
