@@ -77,7 +77,6 @@ genetic_algorithm_tsp-main/
 │       ├── canvas/                  ← renderização do mapa no Canvas
 │       └── composables/             ← WebSocket, tema, preferências
 │
-├── tests/                           ← testes automatizados (pytest)
 └── demos/
     ├── demonstrate_crossover.py     ← demonstração isolada do crossover
     └── demonstrate_mutation.py      ← demonstração isolada da mutação
@@ -156,13 +155,6 @@ Variáveis opcionais: ver `.env.example` (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`, etc
 | [Vue 3](https://vuejs.org/) | Interface reativa |
 | [Vite](https://vite.dev/) | Build e dev server |
 | [Chart.js](https://www.chartjs.org/) | Gráfico de convergência |
-
-## Testes
-
-```bash
-pip install pytest
-python -m pytest tests/
-```
 
 ## Demonstrações isoladas
 

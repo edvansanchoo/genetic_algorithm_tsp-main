@@ -47,6 +47,8 @@ Desktop.ini
 
 # Local agent / scratch (not project source)
 .superpowers/
+.specs/
+docs/superpowers/
 obstaculo.txt
 
 # Frontend
