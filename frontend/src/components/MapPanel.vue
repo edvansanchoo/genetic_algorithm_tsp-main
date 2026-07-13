@@ -6,14 +6,14 @@ import UiSwitch from "./ui/UiSwitch.vue";
 import UiButton from "./ui/UiButton.vue";
 import type { StateUpdate } from "../types/simulation";
 
-defineProps<{
+const props = defineProps<{
   state: StateUpdate | null;
   showTransit: boolean;
   showRunnerUp: boolean;
 }>();
 
 const emit = defineEmits<{
-  setFocus: [vehicleId: number | null];
+  setFocus: [vehicleId: number | null, tripIndex?: number | null];
   setToggle: [key: string, active: boolean];
   toggleBlocked: [mapX: number, mapY: number];
   "update:showTransit": [value: boolean];
@@ -24,6 +24,29 @@ const zoom = ref(1);
 
 function vehicleOptions(state: StateUpdate) {
   return Array.from({ length: state.summary.vehicles_total }, (_, index) => index);
+}
+
+function tripOptions(state: StateUpdate) {
+  const vehicleId = state.focus.vehicle_id;
+  if (vehicleId === null) return [];
+  const plan = state.plans[String(vehicleId)];
+  if (!plan) return [];
+  return plan.trips.map((trip) => ({
+    index: trip.index - 1,
+    label: trip.index,
+  }));
+}
+
+function onVehicleFilterChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value;
+  emit("setFocus", value === "all" ? null : Number(value), null);
+}
+
+function onTripFilterChange(event: Event) {
+  const vehicleId = props.state?.focus.vehicle_id;
+  if (vehicleId === null || vehicleId === undefined) return;
+  const value = (event.target as HTMLSelectElement).value;
+  emit("setFocus", vehicleId, value === "all" ? null : Number(value));
 }
 
 function zoomIn() {
@@ -58,22 +81,28 @@ function toggleFullscreen() {
         @update:model-value="emit('setToggle', 'show_mesh', $event)"
       />
       <label class="map-panel__select-wrap">
-        <span>Filtro</span>
+        <span>Veículo</span>
         <select
           class="map-panel__select"
           :value="state.focus.vehicle_id ?? 'all'"
-          @change="
-            emit(
-              'setFocus',
-              ($event.target as HTMLSelectElement).value === 'all'
-                ? null
-                : Number(($event.target as HTMLSelectElement).value),
-            )
-          "
+          @change="onVehicleFilterChange"
         >
           <option value="all">Todos</option>
           <option v-for="vehicleId in vehicleOptions(state)" :key="vehicleId" :value="vehicleId">
             Veículo {{ vehicleId + 1 }}
+          </option>
+        </select>
+      </label>
+      <label v-if="state.focus.vehicle_id !== null" class="map-panel__select-wrap">
+        <span>Viagem</span>
+        <select
+          class="map-panel__select"
+          :value="state.focus.trip_index ?? 'all'"
+          @change="onTripFilterChange"
+        >
+          <option value="all">Todas</option>
+          <option v-for="trip in tripOptions(state)" :key="trip.index" :value="trip.index">
+            Viagem {{ trip.label }}
           </option>
         </select>
       </label>

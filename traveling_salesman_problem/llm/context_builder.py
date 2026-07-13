@@ -16,7 +16,7 @@ def _serialize_vehicle(vehicle_id: int, plan: DecodedVehiclePlan, capacity: int)
     trips = []
     total_load = 0
     for trip in plan.trips:
-        stops = ["D" if stop.node_id == DEPOT_ID else stop.node_id for stop in trip.stops]
+        stops = [stop.node_id for stop in trip.stops]
         load = sum(stop.quantity for stop in trip.stops if stop.node_id != DEPOT_ID)
         total_load += load
         trips.append({"paradas": stops, "carga": load})

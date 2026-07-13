@@ -8,6 +8,7 @@ const props = defineProps<{
   plan: StateUpdate["plans"][string];
   color: string;
   active: boolean;
+  focusTripIndex: number | null;
   deliveryPriorities: Record<string, number>;
 }>();
 
@@ -23,13 +24,17 @@ const stats = computed(() => ({
   trips: props.plan.trips.length,
 }));
 
-function stopLabel(stop: string): string {
-  return stop === "D" ? "D" : stop;
+function isDepot(stop: string): boolean {
+  return stop === "DEPOT";
 }
 
 function stopPriority(stop: string): number | null {
-  if (stop === "D") return null;
+  if (isDepot(stop)) return null;
   return props.deliveryPriorities[stop] ?? null;
+}
+
+function isTripActive(tripIndex: number): boolean {
+  return props.active && props.focusTripIndex === tripIndex - 1;
 }
 </script>
 
@@ -52,17 +57,30 @@ function stopPriority(stop: string): number | null {
       v-for="trip in plan.trips"
       :key="trip.index"
       class="vehicle-route-card__trip"
-      @click.stop="emit('selectTrip', trip.index)"
+      :class="{ 'vehicle-route-card__trip--active': isTripActive(trip.index) }"
+      @click.stop="emit('selectTrip', trip.index - 1)"
     >
-      <span
-        v-for="(stop, index) in trip.stops"
-        :key="`${trip.index}-${index}`"
-        class="vehicle-route-card__stop"
-      >
-        <UiBadge v-if="stopPriority(stop) !== null" :priority="stopPriority(stop)!" />
-        <span v-else class="vehicle-route-card__depot">D</span>
-        <span v-if="index < trip.stops.length - 1" class="vehicle-route-card__arrow">→</span>
-      </span>
+      <div class="vehicle-route-card__trip-label">
+        <span>Viagem {{ trip.index }}</span>
+        <span class="vehicle-route-card__trip-load">
+          {{ trip.load }}/{{ plan.capacity }} un
+        </span>
+      </div>
+      <div class="vehicle-route-card__stops">
+        <span
+          v-for="(stop, index) in trip.stops"
+          :key="`${trip.index}-${index}`"
+          class="vehicle-route-card__stop"
+        >
+          <span v-if="isDepot(stop)" class="vehicle-route-card__depot">D</span>
+          <UiBadge
+            v-else-if="stopPriority(stop) !== null"
+            :priority="stopPriority(stop)!"
+          />
+          <span v-else class="vehicle-route-card__unknown">{{ stop }}</span>
+          <span v-if="index < trip.stops.length - 1" class="vehicle-route-card__arrow">→</span>
+        </span>
+      </div>
     </div>
   </div>
 </template>
@@ -107,18 +125,47 @@ function stopPriority(stop: string): number | null {
 }
 
 .vehicle-route-card__trip {
+  padding: 8px 10px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-muted, rgba(0, 0, 0, 0.03));
+}
+
+.vehicle-route-card__trip:first-of-type {
+  margin-top: 0;
+}
+
+.vehicle-route-card__trip--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.vehicle-route-card__trip-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: var(--font-sans, inherit);
+}
+
+.vehicle-route-card__trip-load {
+  font-weight: 500;
+  font-family: var(--font-mono);
+}
+
+.vehicle-route-card__stops {
   font-family: var(--font-mono);
   font-size: 12px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  padding: 4px 0;
-  border-top: 1px solid var(--border);
-}
-
-.vehicle-route-card__trip:first-of-type {
-  border-top: none;
 }
 
 .vehicle-route-card__stop {
@@ -138,6 +185,20 @@ function stopPriority(stop: string): number | null {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
+}
+
+.vehicle-route-card__unknown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .vehicle-route-card__arrow {

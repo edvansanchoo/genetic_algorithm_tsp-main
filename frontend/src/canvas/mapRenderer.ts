@@ -120,28 +120,52 @@ function drawPlanRoutes(
   state: StateUpdate,
   transform: MapTransform,
   plans: StateUpdate["plans"],
-  dashed = false,
-  alpha = 1,
+  options: { dashed?: boolean; alpha?: number } = {},
 ) {
+  const { dashed = false, alpha = 1 } = options;
   const focusId = state.focus.vehicle_id;
+  const focusTrip = state.focus.trip_index;
+  const activeTrip =
+    focusId !== null && state.animation?.vehicle_id === focusId
+      ? state.animation.trip_index
+      : null;
+  const tripFocusMode =
+    focusId !== null && (focusTrip !== null || activeTrip !== null);
+
   Object.entries(plans).forEach(([vehicleIdText, plan]) => {
     const vehicleId = Number(vehicleIdText);
     if (focusId !== null && focusId !== vehicleId) return;
+
     const color = vehicleColor(state, vehicleId);
-    ctx.globalAlpha = alpha;
+    const isFocusedVehicle = focusId === vehicleId;
+
     plan.trips.forEach((trip, tripIndex) => {
+      const highlightedTrip = focusTrip ?? activeTrip;
+      const isHighlightedTrip =
+        !tripFocusMode ||
+        !isFocusedVehicle ||
+        highlightedTrip === null ||
+        tripIndex === highlightedTrip;
+      const isGhostTrip = tripFocusMode && isFocusedVehicle && !isHighlightedTrip;
+
       trip.polylines.forEach((polyline) => {
         const points = polylineToCanvas(polyline, transform);
-        if (dashed || tripIndex > 0) {
-          drawDashedLine(ctx, points, color, tripIndex > 0 ? 2 : 2);
+        ctx.globalAlpha = isGhostTrip ? alpha * 0.2 : alpha;
+
+        if (dashed || isGhostTrip || (!tripFocusMode && tripIndex > 0)) {
+          drawDashedLine(ctx, points, color, isGhostTrip ? 1 : 2);
         } else {
-          drawSolidLine(ctx, points, color, focusId === vehicleId ? 3 : 2);
+          drawSolidLine(ctx, points, color, isFocusedVehicle ? 3 : 2);
         }
-        for (let index = 1; index < points.length; index += 4) {
-          drawArrow(ctx, points[index - 1], points[index], color);
+
+        if (!isGhostTrip && !dashed) {
+          for (let index = 1; index < points.length; index += 4) {
+            drawArrow(ctx, points[index - 1], points[index], color);
+          }
         }
       });
     });
+
     ctx.globalAlpha = 1;
   });
 }
@@ -192,8 +216,7 @@ export function drawMap(
       state,
       transform,
       { [String(state.focus.vehicle_id)]: state.runner_up[String(state.focus.vehicle_id)] },
-      true,
-      0.55,
+      { dashed: true, alpha: 0.55 },
     );
   }
 

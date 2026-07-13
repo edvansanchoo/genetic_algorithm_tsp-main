@@ -42,7 +42,12 @@ function groupedRoutes() {
         v-for="trip in group.trips"
         :key="trip.tripIndex"
         class="route-trip"
-        @click.stop="emit('setFocus', group.vehicleId, trip.tripIndex)"
+      :class="{
+        active:
+          state.focus.vehicle_id === group.vehicleId &&
+          state.focus.trip_index === trip.tripIndex,
+      }"
+      @click.stop="emit('setFocus', group.vehicleId, trip.tripIndex)"
       >
         {{ trip.text }}
       </div>

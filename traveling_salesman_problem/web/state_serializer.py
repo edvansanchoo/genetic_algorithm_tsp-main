@@ -71,10 +71,7 @@ def _serialize_plan(mesh, plan: DecodedVehiclePlan, capacity: int) -> dict:
     trips_payload = []
     total_load = 0
     for index, trip in enumerate(plan.trips, start=1):
-        stops = [
-            "D" if stop.node_id == DEPOT_ID else stop.node_id
-            for stop in trip.stops
-        ]
+        stops = [stop.node_id for stop in trip.stops]
         load = sum(
             stop.quantity for stop in trip.stops if stop.node_id != DEPOT_ID
         )

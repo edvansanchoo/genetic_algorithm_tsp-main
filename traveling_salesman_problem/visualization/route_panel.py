@@ -12,7 +12,7 @@ ROUTE_PANEL_ROW_HEIGHT = 16
 
 
 def _stop_label(node_id: str) -> str:
-    return "D" if node_id == DEPOT_ID else node_id
+    return "DEPOT" if node_id == DEPOT_ID else node_id
 
 
 def format_trip_line(trip: Trip, trip_index: int, capacity: int) -> str:

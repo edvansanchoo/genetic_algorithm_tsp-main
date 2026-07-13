@@ -84,6 +84,9 @@ const vehicleEntries = computed(() => {
               :plan="entry.plan"
               :color="entry.color"
               :active="state.focus.vehicle_id === entry.vehicleId"
+              :focus-trip-index="
+                state.focus.vehicle_id === entry.vehicleId ? state.focus.trip_index : null
+              "
               :delivery-priorities="deliveryPriorities"
               @select-vehicle="emit('setFocus', entry.vehicleId, null)"
               @select-trip="emit('setFocus', entry.vehicleId, $event)"
