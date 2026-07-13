@@ -119,6 +119,24 @@ O dashboard replica os controles principais do Desktop e adiciona:
 
 Comandos são enviados via WebSocket (`/ws`); o backend executa a mesma lógica de simulação do modo headless.
 
+## Assistente LLM (Ollama)
+
+O dashboard Web inclui a aba **Assistente** para integração com LLM local:
+
+- Gerar instruções para motoristas (por veículo ou todos)
+- Relatórios diário/semanal e sugestões de melhoria
+- Chat em linguagem natural sobre rotas e entregas
+- Exportar conteúdo em Markdown ou PDF
+
+### Requisitos adicionais
+
+1. [Ollama](https://ollama.com/) instalado e em execução (`ollama serve`)
+2. Modelo local: `ollama pull gemma4:e2b`
+3. Dependências Python já incluídas em `requirements.txt` (`httpx`, `markdown`)
+4. PDF opcional: `pip install -r requirements-llm.txt` (WeasyPrint)
+
+Variáveis opcionais: ver `.env.example` (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`, etc.).
+
 ## Dependências
 
 ### Python
