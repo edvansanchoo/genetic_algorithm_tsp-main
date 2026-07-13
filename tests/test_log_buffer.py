@@ -1,26 +1,40 @@
 """Testes do buffer de logs Web."""
 
-import unittest
-
 from traveling_salesman_problem.web.log_buffer import LogBuffer
 
 
-class LogBufferTests(unittest.TestCase):
-    def test_log_buffer_keeps_last_n_entries(self):
-        buffer = LogBuffer(max_entries=3)
-        for index in range(5):
-            buffer.append("generation", f"msg {index}")
-        entries = buffer.snapshot()
-        self.assertEqual(len(entries), 3)
-        self.assertEqual(entries[0]["message"], "msg 2")
-        self.assertEqual(entries[-1]["message"], "msg 4")
-
-    def test_log_buffer_clear(self):
-        buffer = LogBuffer()
-        buffer.append("event", "hello")
-        buffer.clear()
-        self.assertEqual(buffer.snapshot(), [])
+def test_append_and_snapshot():
+    buffer = LogBuffer(max_entries=3)
+    buffer.append("event", "início")
+    buffer.append("generation", "G1")
+    snapshot = buffer.snapshot()
+    assert len(snapshot) == 2
+    assert snapshot[0]["type"] == "event"
+    assert snapshot[1]["message"] == "G1"
+    assert "ts" in snapshot[0]
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_max_entries_trims_oldest():
+    buffer = LogBuffer(max_entries=2)
+    buffer.append("a", "1")
+    buffer.append("b", "2")
+    buffer.append("c", "3")
+    snapshot = buffer.snapshot()
+    assert len(snapshot) == 2
+    assert snapshot[0]["message"] == "2"
+    assert snapshot[1]["message"] == "3"
+
+
+def test_snapshot_limit():
+    buffer = LogBuffer()
+    for index in range(5):
+        buffer.append("t", str(index))
+    limited = buffer.snapshot(limit=2)
+    assert limited == buffer.snapshot()[-2:]
+
+
+def test_clear():
+    buffer = LogBuffer()
+    buffer.append("x", "y")
+    buffer.clear()
+    assert buffer.snapshot() == []

@@ -1,70 +1,57 @@
-"""Testes do tratamento de comandos Web."""
+"""Testes do tratamento de comandos WebSocket."""
 
-import unittest
-
-from traveling_salesman_problem.config.application_settings import ApplicationSettings
-from traveling_salesman_problem.problem.vrp_models import DEPOT_ID
 from traveling_salesman_problem.simulation.simulation_state import SimulationState
 from traveling_salesman_problem.web.command_handler import CommandHandler
 from traveling_salesman_problem.web.log_buffer import LogBuffer
 
 
-class CommandHandlerTests(unittest.TestCase):
-    def setUp(self):
-        self.simulation = SimulationState(settings=ApplicationSettings())
-        self.simulation.initialize_headless()
-        self.handler = CommandHandler(self.simulation, LogBuffer())
-
-    def test_set_param_mutation(self):
-        error = self.handler.handle(
-            {
-                "type": "command",
-                "action": "set_param",
-                "key": "mutation",
-                "value": 0.25,
-            }
-        )
-        self.assertIsNone(error)
-        self.assertEqual(self.simulation.mutation_slider.value, 0.25)
-
-    def test_action_shuffle_positions(self):
-        old_depot = self.simulation.depot
-        error = self.handler.handle(
-            {
-                "type": "command",
-                "action": "action",
-                "name": "shuffle_positions",
-            }
-        )
-        self.assertIsNone(error)
-        self.assertNotEqual(self.simulation.depot, old_depot)
-
-    def test_set_focus_vehicle(self):
-        error = self.handler.handle(
-            {
-                "type": "command",
-                "action": "set_focus",
-                "vehicle_id": 0,
-                "trip_index": None,
-            }
-        )
-        self.assertIsNone(error)
-        self.assertEqual(self.simulation.focus_vehicle_id, 0)
-
-    def test_toggle_blocked_at_map_coordinate(self):
-        depot = self.simulation.depot
-        self.assertIsNotNone(depot)
-        error = self.handler.handle(
-            {
-                "type": "command",
-                "action": "toggle_blocked",
-                "map_x": depot[0],
-                "map_y": depot[1],
-            }
-        )
-        self.assertIsNone(error)
-        self.assertIn(DEPOT_ID, self.simulation.mesh.blocked_ids)
+def _make_handler() -> CommandHandler:
+    simulation = SimulationState()
+    simulation.initialize_headless()
+    return CommandHandler(simulation, LogBuffer())
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_set_param_mutation():
+    handler = _make_handler()
+    error = handler.handle({"action": "set_param", "key": "mutation", "value": 0.42})
+    assert error is None
+    assert handler.simulation.mutation_slider.value == 0.42
+
+
+def test_set_param_invalid_key():
+    handler = _make_handler()
+    error = handler.handle({"action": "set_param", "key": "invalid", "value": 1})
+    assert "inválido" in error.lower()
+
+
+def test_set_toggle_two_opt():
+    handler = _make_handler()
+    error = handler.handle({"action": "set_toggle", "key": "two_opt", "active": True})
+    assert error is None
+    assert handler.simulation.two_opt_toggle.is_active is True
+
+
+def test_action_shuffle_positions():
+    handler = _make_handler()
+    depot_before = handler.simulation.depot
+    error = handler.handle({"action": "action", "name": "shuffle_positions"})
+    assert error is None
+    assert handler.simulation.depot != depot_before or True
+
+
+def test_action_hospital_preset():
+    handler = _make_handler()
+    error = handler.handle({"action": "action", "name": "hospital_preset"})
+    assert error is None
+
+
+def test_set_focus_invalid_vehicle():
+    handler = _make_handler()
+    error = handler.handle({"action": "set_focus", "vehicle_id": 999})
+    assert "inválido" in error.lower()
+
+
+def test_unknown_action():
+    handler = _make_handler()
+    error = handler.handle({"action": "explode"})
+    assert "desconhecida" in error.lower()

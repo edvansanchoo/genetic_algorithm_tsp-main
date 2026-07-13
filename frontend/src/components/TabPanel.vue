@@ -4,6 +4,7 @@ import ConvergenceChart from "./ConvergenceChart.vue";
 import LogConsole from "./LogConsole.vue";
 import StatsTable from "./StatsTable.vue";
 import HistoryList from "./HistoryList.vue";
+import LlmAssistantPanel from "./LlmAssistantPanel.vue";
 import VehicleRouteCard from "./VehicleRouteCard.vue";
 import UiTabBar from "./ui/UiTabBar.vue";
 import type { HistoryEntry, StateUpdate } from "../types/simulation";
@@ -23,6 +24,7 @@ const tabs = [
   { id: "stats", label: "Estatísticas" },
   { id: "history", label: "Histórico" },
   { id: "logs", label: "Logs" },
+  { id: "assistente", label: "Assistente" },
 ];
 
 const deliveryPriorities = computed(() => {
@@ -95,6 +97,7 @@ const vehicleEntries = computed(() => {
         <HistoryList :history="history" />
       </div>
       <LogConsole v-if="activeTab === 'logs' && state" :state="state" />
+      <LlmAssistantPanel v-if="activeTab === 'assistente'" :state="state" />
     </div>
   </div>
 </template>

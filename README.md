@@ -61,7 +61,10 @@ genetic_algorithm_tsp-main/
 ├── web.py                           ← entrada Web (FastAPI)
 ├── requirements.txt
 ├── requirements-web.txt               ← dependências mínimas do modo Web
-├── GUIA.md                          ← documentação detalhada em português
+├── GUIA.md                          ← documentação didática em português
+├── docs/
+│   ├── ARQUITETURA.md               ← diagramas e camadas do sistema
+│   └── API.md                       ← contrato WebSocket e REST LLM
 │
 ├── traveling_salesman_problem/
 │   ├── config/                      ← janela, algoritmo, tema visual
@@ -69,7 +72,8 @@ genetic_algorithm_tsp-main/
 │   ├── problem/                     ← entregas, malha de ruas, VRP, prioridades
 │   ├── simulation/                  ← estado da simulação e loop Pygame
 │   ├── visualization/               ← mapa, widgets, animação de rotas
-│   └── web/                         ← servidor, WebSocket, serialização de estado
+│   ├── web/                         ← servidor, WebSocket, serialização de estado
+│   └── llm/                         ← assistente Ollama (modo Web)
 │
 ├── frontend/                        ← dashboard Vue 3 + TypeScript (Vite)
 │   └── src/
@@ -79,8 +83,12 @@ genetic_algorithm_tsp-main/
 │
 ├── tests/                           ← testes automatizados (pytest)
 └── demos/
-    ├── demonstrate_crossover.py     ← demonstração isolada do crossover
-    └── demonstrate_mutation.py      ← demonstração isolada da mutação
+    ├── demonstrate_crossover.py     ← operador de cruzamento
+    ├── demonstrate_mutation.py      ← operador de mutação
+    ├── demonstrate_fitness.py       ← cálculo de fitness e prioridade
+    ├── demonstrate_priority.py      ← preset hospitalar
+    ├── demonstrate_headless_generations.py  ← AG sem interface gráfica
+    └── demonstrate_web_api.py       ← consumo da API Web
 ```
 
 | Pacote | Responsabilidade |
@@ -119,6 +127,24 @@ O dashboard replica os controles principais do Desktop e adiciona:
 
 Comandos são enviados via WebSocket (`/ws`); o backend executa a mesma lógica de simulação do modo headless.
 
+## Assistente LLM (Ollama)
+
+O dashboard Web inclui a aba **Assistente** para integração com LLM local:
+
+- Gerar instruções para motoristas (por veículo ou todos)
+- Relatórios diário/semanal e sugestões de melhoria
+- Chat em linguagem natural sobre rotas e entregas
+- Exportar conteúdo em Markdown ou PDF
+
+### Requisitos adicionais
+
+1. [Ollama](https://ollama.com/) instalado e em execução (`ollama serve`)
+2. Modelo local: `ollama pull gemma4:e2b`
+3. Dependências Python já incluídas em `requirements.txt` (`httpx`, `markdown`)
+4. PDF opcional: `pip install -r requirements-llm.txt` (WeasyPrint)
+
+Variáveis opcionais: ver `.env.example` (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`, etc.).
+
 ## Dependências
 
 ### Python
@@ -139,23 +165,39 @@ Comandos são enviados via WebSocket (`/ws`); o backend executa a mesma lógica 
 | [Vite](https://vite.dev/) | Build e dev server |
 | [Chart.js](https://www.chartjs.org/) | Gráfico de convergência |
 
-## Testes
+## Testes automatizados
 
 ```bash
-pip install pytest
-python -m pytest tests/
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
 ```
 
-## Demonstrações isoladas
+Os testes cobrem operadores genéticos, fitness, comandos WebSocket, serialização de estado, serviço de simulação e endpoints LLM (com mocks — **não requer Ollama**).
+
+## Demonstrações
+
+Scripts executáveis que ilustram componentes isolados do sistema:
 
 ```bash
+# Algoritmo Genético
 python -m demos.demonstrate_crossover
 python -m demos.demonstrate_mutation
+python -m demos.demonstrate_fitness
+python -m demos.demonstrate_priority
+python -m demos.demonstrate_headless_generations
+
+# API Web (requer python web.py em outro terminal)
+python -m demos.demonstrate_web_api
 ```
 
-## Documentação detalhada
+## Documentação
 
-Para explicação passo a passo, conceitos, fluxogramas e referência de código, consulte [GUIA.md](GUIA.md).
+| Documento | Conteúdo |
+|-----------|----------|
+| [GUIA.md](GUIA.md) | Explicação didática módulo a módulo |
+| [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | Camadas, diagramas e decisões de design |
+| [docs/API.md](docs/API.md) | Contrato WebSocket (`/ws`) e REST (`/api/llm/*`) |
+| `http://127.0.0.1:8000/docs` | Swagger UI (com backend rodando) |
 
 ## Licença
 

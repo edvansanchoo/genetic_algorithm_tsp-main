@@ -13,9 +13,10 @@ from traveling_salesman_problem.visualization.route_animation import (
     TripAnimationState,
     advance_trip_animation,
 )
+from traveling_salesman_problem.llm.session_history import SessionHistory
 from traveling_salesman_problem.web.command_handler import CommandHandler
 from traveling_salesman_problem.web.log_buffer import LogBuffer
-from traveling_salesman_problem.web.state_serializer import serialize_state
+from traveling_salesman_problem.web.state_serializer import _priority_served_pct, serialize_state
 
 BroadcastFn = Callable[[dict], Awaitable[None]]
 
@@ -28,6 +29,7 @@ class SimulationService:
     logs: LogBuffer = field(default_factory=LogBuffer)
     animation_state: TripAnimationState = field(default_factory=TripAnimationState)
     command_handler: CommandHandler | None = None
+    session_history: SessionHistory = field(default_factory=SessionHistory)
 
     generation_number: int = 0
     total_fitness: float = 0.0
@@ -135,6 +137,22 @@ class SimulationService:
             if not self.paused:
                 result = self.simulation.run_one_generation()
                 self._store_generation_result(result)
+                generation_number, fitness, distance, priority, plans, *_ = result
+                priority_pct = _priority_served_pct(self.simulation, plans)
+                blocked = (
+                    len(self.simulation.mesh.blocked_ids)
+                    if self.simulation.mesh
+                    else 0
+                )
+                vehicle_count = self.simulation.vehicle_count_slider.integer_value
+                self.session_history.record_if_improved(
+                    generation_number,
+                    fitness,
+                    distance,
+                    priority_pct,
+                    blocked,
+                    vehicle_count,
+                )
                 self.logs.append("generation", self._format_generation_log(result))
 
             self._advance_animation(dt_seconds)
